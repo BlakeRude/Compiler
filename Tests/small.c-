@@ -1,0 +1,29 @@
+// C-S21
+//
+bool a;
+int b[100];
+
+// procedure max
+int max(int x, y)
+{
+    int z, zz;
+    char c;
+
+    if x>y then z=x;
+        else z=y;
+
+    b[41] = max(b[42*1], 43);
+    ;
+
+    while 666>665 do {
+         int in;
+
+         aardvark[2] = in;
+         b[3];         
+         in[6];
+         z = zz;
+         break;
+    }
+
+    return;
+}

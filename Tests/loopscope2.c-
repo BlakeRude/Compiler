@@ -1,0 +1,29 @@
+main()
+{
+     int x;
+
+     while true do {
+           int x;          // OK
+           }
+
+
+     for y = 1 to 10 do {
+           int x;         // OK
+           }
+
+     for y = 1 to 10 do { {
+           int x;        // OK
+           } }
+
+     for y = 1 to 10 do {
+           int y;        // y redeclared
+           }
+
+     for y = 1 to 10 do { {
+           int y;        // OK
+           } }
+
+     for y = 1 to 10 do ;
+     { int y; }          // OK
+}
+

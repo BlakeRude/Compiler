@@ -1,0 +1,14 @@
+main()
+{
+    int x;
+
+    for y=1 to 10 do {
+        int y;
+        int x;
+
+        x = y;
+    }
+    x = y;
+    for y=1 to 10 do x = y;
+}
+

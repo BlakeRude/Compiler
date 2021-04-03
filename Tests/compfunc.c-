@@ -1,0 +1,26 @@
+main();
+
+elk(int x) {
+   int x;
+   { int x;
+       x=1;
+   }
+   x=1;
+}
+
+fox(int x) {
+   if true then
+   { int x;
+       x=1;
+   }
+   x=1;
+}
+
+gnu(bool x) 
+   if x then
+   { int x;
+       x=1;
+   }
+
+hog(int x) 
+   for x = 1 to 731 do x=8;

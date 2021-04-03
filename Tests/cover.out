@@ -1,0 +1,27 @@
+====================================
+FILE: cover.c-
+ERROR(16): ':<:' requires operands of type int but rhs is of type char.
+ERROR(20): Unary '--' requires an operand of type int but was given type char.
+ERROR(21): Unary '?' requires an operand of type int but was given type char.
+ERROR(23): Cannot index nonarray 'e'.
+ERROR(23): Cannot index nonarray 'e'.
+ERROR(23): '+' requires operands of type int but lhs is of type bool.
+ERROR(23): '+' requires operands of type int but rhs is of type bool.
+ERROR(24): Cannot index nonarray 'e'.
+ERROR(24): Cannot index nonarray 'e'.
+ERROR(24): Array 'e' should be indexed by type int but got type bool.
+ERROR(27): 'and' requires operands of type bool but lhs is of type int.
+ERROR(27): 'and' requires operands of type bool but rhs is of type int.
+WARNING(32): The variable 'i' seems not to be used.
+WARNING(32): The variable 'x' seems not to be used.
+WARNING(40): Variable 'b' may be uninitialized when used here.
+ERROR(40): Not expecting array in parameter 2 of call to 'fred' declared on line 6.
+WARNING(40): Variable 'd' may be uninitialized when used here.
+WARNING(40): Variable 'e' may be uninitialized when used here.
+WARNING(40): Variable 'f' may be uninitialized when used here.
+WARNING(36): The variable 'a' seems not to be used.
+WARNING(37): The variable 'c' seems not to be used.
+WARNING(39): The variable 'g' seems not to be used.
+WARNING(2): The variable 'fahrenheit' seems not to be used.
+Number of warnings: 10
+Number of errors: 13
