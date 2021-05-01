@@ -1,0 +1,7 @@
+// C-S21
+int ga:111;
+main(){
+    output(ga);
+    {
+    }
+}

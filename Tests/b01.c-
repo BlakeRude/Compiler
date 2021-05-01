@@ -1,0 +1,6 @@
+// C-S21
+main()
+{
+     output(50*13);
+     outnl();
+}

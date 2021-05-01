@@ -1,0 +1,7 @@
+// C-S21
+int cat(int x) if x>0 then  return x+x; else x*x;
+
+main()
+{
+    output(cat(88)+cat(-17));
+}

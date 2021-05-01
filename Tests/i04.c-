@@ -1,0 +1,7 @@
+// C-S21
+main(){
+    int ii:666;
+    output(ii);
+    {
+    }
+}

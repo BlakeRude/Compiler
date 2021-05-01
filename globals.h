@@ -10,6 +10,8 @@ extern int lineno;
 extern int isMain;
 extern int numErrors;
 extern int numWarnings;
+extern int foffset;
+extern int goffset;
 const int MAXCHILDREN = 3;
 // the exact type of the token or node involved.  These are divided into
 // various "kinds" in the enums that follow
@@ -38,7 +40,7 @@ enum ExpType {Void, Integer, Boolean, Char, CharInt, Equal, UndefinedType};
 enum DeclType {DeclVoid, DeclInteger, DeclBoolean, DeclChar, DeclCharInt, DeclEqual, DeclUndefinedType};
 // What kind of scoping is used?  (decided during typing)
 enum VarKind {None, Local, Global, Parameter, LocalStatic};
-
+enum MemoryKind {loca, stat, para, glob, non};
 typedef struct treeNode
 {
     // connectivity in the tree
@@ -62,7 +64,7 @@ typedef struct treeNode
         unsigned char cvalue;              // used when a character
     	char *string;                      // used when a string constant
     	char *name;                       // used when IdK
-        int size; //array
+        //int size = 1; //array
     } attr;                                 
     ExpType expType;		               // used when ExpK for type checking
     DeclType declType;                     // explained above when declaring enum DeclType
@@ -80,6 +82,12 @@ typedef struct treeNode
     bool isNC = false;
     bool isConstant = false;
     bool isDeclared = true;
+    bool prevDecl = false;
+    bool isFun = false;
+    bool isStringConstant = false;
+    MemoryKind mem = non;
+    int size = 1;
+    int location = 0; //is 0 right? n>=0
 
     // even more semantic stuff will go here in later assignments.
 } TreeNode;

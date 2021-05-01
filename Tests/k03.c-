@@ -1,0 +1,10 @@
+main()
+{
+     for i = 0 to 3 do {
+          for j = 0 to 3 do {
+              output(i);
+              output(j);
+              outnl();
+          }
+     }
+}

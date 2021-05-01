@@ -1,0 +1,17 @@
+// C-S21
+main()
+{
+    int x;
+
+    x = 0;
+    while x<10 do {
+        output(x);
+        x = x+1;
+    }
+
+    x = 30;
+    while x<10 do {
+        output(x);
+        x = x+1;
+    }
+}

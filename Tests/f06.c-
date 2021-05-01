@@ -1,0 +1,18 @@
+// C-S21
+bool cat()
+{
+    return true;
+}
+
+main()
+{
+    bool x;
+
+    x = cat()  and  false;
+    outputb(x);
+    x = cat()  or  false;
+    outputb(x);
+    x = not  cat();
+    outputb(x);
+    outnl();
+}

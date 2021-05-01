@@ -1,0 +1,8 @@
+// C-S21
+main(){
+    int xx[10];
+    {
+        output(xx[-1]);
+        outnl();
+    }
+}

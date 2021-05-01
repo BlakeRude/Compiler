@@ -1,0 +1,18 @@
+// C-S21
+int z;
+
+cat()
+{
+    int z;
+    z = 99;
+    output(z);
+}
+
+main()
+{
+    int z;
+
+    z = 1001;
+    cat();
+    output(z);
+}

@@ -1,0 +1,7 @@
+// C-S21
+main(){
+    {
+        bool ss: not  true;
+        outputb(ss);
+    }
+}

@@ -1,0 +1,14 @@
+// C-S21
+// testing static variables
+
+int goad:666;
+main()
+{
+    static int load;
+    {
+        static int goad:777;
+        output(goad);
+    }
+    output(goad);
+    outnl();
+}

@@ -1,0 +1,21 @@
+// C-S21
+
+int runningSum;
+int sum(int x) {
+    static int runningSum:0;
+
+    runningSum += x;
+    return runningSum;
+}
+
+main()
+{
+    runningSum = 7000;
+    output(runningSum);
+
+    sum(666);
+    sum(3);
+    output(sum(0));
+
+    output(runningSum);
+}

@@ -1,0 +1,11 @@
+// C-S21
+bool x;
+bool y;
+
+main()
+{
+    x = true;
+    y = false;
+    outputb(x  and  y);
+    outnl();
+}

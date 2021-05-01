@@ -1,0 +1,6 @@
+// C-S21
+main()
+{
+     outputb(true  and  true);
+     outnl();
+}

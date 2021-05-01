@@ -1,0 +1,7 @@
+main()
+{
+     for i = 100 to 90 by -2 do {
+         output(i);
+         outnl();
+     }
+}

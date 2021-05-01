@@ -1,0 +1,19 @@
+// C-S21
+main()
+{
+    int x;
+    int y;
+
+    x = 0;
+    while x<6 do {
+        y = 0;
+        while y<6 do {
+              output(y);
+              if y==4 then  break;
+              y = y+1;
+        }
+        output(x);
+        if x==4 then  break;
+        x = x+1;
+    }
+}

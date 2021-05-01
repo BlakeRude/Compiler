@@ -1,0 +1,12 @@
+// C-S21
+int x;
+int y;
+
+main()
+{
+    x = 753;
+    y = 444;
+    output(x++);
+    output(x = y++);
+    outnl();
+}

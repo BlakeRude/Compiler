@@ -5,7 +5,7 @@ CFLAGS = -g -w # for use with C++ if file ext is .c -DCPLUSPLUS
 
 SRCS = $(BIN).y $(BIN).l
 HDRS = scanType.h
-OBJS = lex.yy.o symbolTable.o util.o ourgetopt.o semanticRefactor.o
+OBJS = lex.yy.o symbolTable.o util.o ourgetopt.o semanticRefactor.o yyerror.o
 
 $(BIN): $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o c-

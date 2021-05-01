@@ -1,0 +1,7 @@
+// C-S21
+bool gb:true;
+main(){
+    outputb(gb);
+    {
+    }
+}

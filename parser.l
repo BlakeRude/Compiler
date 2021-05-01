@@ -11,16 +11,21 @@
  #include "scanType.h"
  #include "parser.tab.c"
 
- static int line=1;
-
+ //static int line=1;
+ int line=1;
+ char *lastToken;
  static int setValue(int linenum, int tokenClass, char *svalue)
-{
+{/*
+    if(svalue)
+    {
+        printf("s: %s\n", svalue);fflush(stdout);
+    }*/
     // create and handle default data storage
     yylval.tokenData = new TokenData;
     yylval.tokenData->tokenclass = tokenClass;
     yylval.tokenData->linenum = linenum;
     yylval.tokenData->tokenstr = strdup(svalue);
-
+    lastToken = svalue;
     switch (tokenClass) {
     case NUMCONST:
         yylval.tokenData->nvalue = atof(svalue); 
@@ -169,7 +174,7 @@
         yylval.tokenData->svalue = svalue;         
         break;
     case ';':
-        yylval.tokenData->svalue = svalue;         
+        yylval.tokenData->svalue = svalue;      
         break;
     case ':':
         yylval.tokenData->svalue = svalue;         
@@ -200,6 +205,7 @@
         break;
     default:
         printf("ERROR(parser.l): switch statement\n");
+        break;
     }
     yylval.tokenData->svalue = (char*)svalue;
 
@@ -297,11 +303,11 @@ to                   { return setValue(line, TO, TO_);}
 
 [a-zA-Z][a-zA-Z0-9]*  { return setValue(line, ID, yytext); }
 [0-9][0-9]*           { return setValue(line, NUMCONST, yytext); }
-['](\\.|[^'\\\n])*['] { return setValue(line, CHARCONST, yytext); }
+['](\\.|[^'\\\n])*['] { if(yyleng-2 > 1){ if((strcmp(yytext, "'\\n'") == 0) ||(strcmp(yytext, "'\\0'") == 0) || (strcmp(yytext, "'\\''") == 0) ||(strcmp(yytext, "'\\t'") == 0)){} else{printf("WARNING(%d): character is %d characters long and not a single character: '%s'.  The first char will be used.\n", line, yyleng-2, yytext); numWarnings++;} return setValue(line, CHARCONST, yytext); } else if(yyleng-2 == 0){ printf("ERROR(%d): Empty character ''.  Characters ignored.\n",line); numErrors++; } else{ return setValue(line, CHARCONST, yytext); } }
 ["](\\.|[^"\\\n])*["] { return setValue(line, STRINGCONST, yytext); } //finding out about \\. was a godsend...
 [ \t]                 ; // get rid of white space (from calc.l)
 \n                    { line++; }
-.                     { return setValue(line, INVALID, yytext); }
+.                     { printf("ERROR(%d): Invalid or misplaced input character: '%s'. Character Ignored.\n", line, yytext); numErrors++; }
 %%
 /*
 // C/C++ Code here, main can be the bison part

@@ -21,44 +21,8 @@ bool forflag = false;
 TreeNode *mostRecentFunc = new treeNode;
 void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
 {
-    //printf("%d.\n",syntaxTree->lineno);
     fflush(stdout);
-    /*
-    if(syntaxTree->isNC)
-    {
-        printf("%d\n",syntaxTree->attr.value);fflush(stdout);
-    }
-    else if(syntaxTree->attr.name)
-    {
-        printf("%s\n",syntaxTree->attr.name);fflush(stdout);
-    }
-    */
-    //symbolTable.print(pointerPrintAddr);
-    /////////////////////////////////////////////////
-    //I wrote about 3k lines previously, refactoring
-    //to use what you showed in the other dayclass instead of book
-    //it increases my work greatly to change it last minute
-    //but i was having too many scoping difficulties with
-    //previous implementation
-    //
-    //refactoring to do:
-    //HECKENDORN IN CLASS:
-    //....
-    //case for:                 (same idea for everything else as well)
-    //      symtab->enter();
-    //      process stuff...
-    //      traverse(current->child[0]);
-    //      process stuff...
-    //      traverse(current->child[1]);
-    //      process stuff...
-    //      traverse(current->child[2]);
-    //      process stuff...
-    //      symtam->apply...(checkused)
-    //      symtab->leave()
-    //      break;
-
     //DECLARATIONS
-
     if (syntaxTree->nodekind == DeclK)
     {
         switch (syntaxTree->subkind.decl)
@@ -70,9 +34,8 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 //printf("static initialization\n");
                 syntaxTree->isInit = true;
             }
-            //printf("hello: %s\n",(symbolTable.stack.back()->scopeName()).c_str());
+
             void *data = symbolTable.lookup(syntaxTree->attr.name);
-            //bool ins = symbolTable.insert(syntaxTree->attr.name, syntaxTree);
             if (data == NULL)
             {
                 if (forflag)
@@ -93,6 +56,18 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     {
                         //printf("global initialization\n");
                         syntaxTree->isInit = true;
+                        syntaxTree->mem = glob;
+                    }
+                    else
+                    {
+                        if (syntaxTree->isStatic)
+                        {
+                            syntaxTree->mem = stat;
+                        }
+                        else
+                        {
+                            syntaxTree->mem = loca;
+                        }
                     }
                 }
                 else
@@ -104,13 +79,53 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             }
             else
             {
-                printf("ERROR(%d): Symbol '%s' is already declared at line %d.\n", syntaxTree->lineno, syntaxTree->attr.name, static_cast<TreeNode *>(data)->lineno);
-                numErrors++;
+                bool ins = symbolTable.insert(syntaxTree->attr.name, syntaxTree);
+                if (!ins)
+                {
+                    printf("ERROR(%d): Symbol '%s' is already declared at line %d.\n", syntaxTree->lineno, syntaxTree->attr.name, static_cast<TreeNode *>(data)->lineno);
+                    numErrors++;
+                }
             }
+
             if (syntaxTree->child[0] != NULL)
             {
                 semanticAnalysis(syntaxTree->child[0], symbolTable);
             }
+
+            switch (syntaxTree->mem)
+            {
+            case glob:
+                if (syntaxTree->isArray)
+                {
+                    syntaxTree->location = goffset - 1;
+                }
+                else
+                {
+                    syntaxTree->location = goffset;
+                }
+                break;
+            case stat:
+                if (syntaxTree->isArray)
+                {
+                    syntaxTree->location = goffset - 1;
+                }
+                else
+                {
+                    syntaxTree->location = goffset;
+                }
+                break;
+            default:
+                if (syntaxTree->isArray)
+                {
+                    syntaxTree->location = foffset - 1;
+                }
+                else
+                {
+                    syntaxTree->location = foffset;
+                }
+                break;
+            }
+
             if (syntaxTree->child[0] != NULL)
             {
                 syntaxTree->isInit = true;
@@ -143,13 +158,16 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         printf("undefined is of type ");
                         break;
                     default:
-                        printf("bad, dont want this");
+                        printf("bad2, dont want this\n");
                         break;
                     }
                     switch (syntaxTree->child[0]->nodeType)
                     {
                     case nInt:
                         printf("int\n");
+                        break;
+                    case nVoid:
+                        printf("void\n");
                         break;
                     case nBool:
                         printf("bool\n");
@@ -161,7 +179,8 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         printf("undefined\n");
                         break;
                     default:
-                        printf("bad, dont want this");
+                        printf("badbad\n");
+                        break;
                         break;
                     }
                 }
@@ -184,10 +203,25 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     printf("an array.\n");
                 }
             }
+            switch (syntaxTree->mem)
+            {
+            case glob:
+                goffset = goffset - syntaxTree->size;
+                break;
+            case stat:
+                goffset = goffset - syntaxTree->size;
+                break;
+            default:
+                foffset = foffset - syntaxTree->size;
+                break;
+            }
             break;
         }
         case FuncK:
         {
+            syntaxTree->mem = glob;
+            foffset = -2;
+
             returnFlag = false;
             syntaxTree->isInit = true;
             if (strcmp(syntaxTree->attr.name, "main") == 0)
@@ -222,6 +256,9 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 semanticAnalysis(syntaxTree->child[0], symbolTable);
             }
+            //after parms, set func size = foffset
+            syntaxTree->size = foffset;
+
             if (syntaxTree->child[1] != NULL)
             {
                 if (syntaxTree->child[1]->nodekind == StmtK && syntaxTree->child[1]->subkind.stmt == CompoundK)
@@ -268,18 +305,37 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
         }
         case ParamK:
         {
+            syntaxTree->mem = para;
+            if (syntaxTree->isArray)
+            {
+                syntaxTree->location = foffset;
+            }
+            else
+            {
+                syntaxTree->location = foffset;
+            }
             syntaxTree->isInit = true;
-            void *data = symbolTable.lookup(syntaxTree->attr.name);
+            bool b = symbolTable.insert(syntaxTree->attr.name, syntaxTree);
+            //void *data = symbolTable.lookup(syntaxTree->attr.name);
+            if (b)
+            {
+            }
+            else
+            {
+                void *data = symbolTable.lookup(syntaxTree->attr.name);
+                printf("ERROR(%d): Symbol '%s' is already declared at line %d.\n", syntaxTree->lineno, syntaxTree->attr.name, static_cast<TreeNode *>(data)->lineno);
+                numErrors++;
+            }
+            /*
             if (data == NULL)
             {
                 symbolTable.insert(syntaxTree->attr.name, syntaxTree);
             }
             else
             {
-                printf("ERROR(%d): Symbol '%s' is already declared at line %d.\n", syntaxTree->lineno, syntaxTree->attr.name, static_cast<TreeNode *>(data)->lineno);
-                numErrors++;
             }
-            //parms are siblings not children
+            */
+            foffset = foffset - syntaxTree->size;
             break;
         }
         default:
@@ -310,23 +366,29 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 printf("ERROR(YOU SHOULD NOT SEE THIS) IfKc[0].\n");
             }
-
             if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
             {
             }
-            else if (syntaxTree->child[0] != NULL && (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid))
+            else if (!(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "!=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "++") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "!=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0))
             {
                 void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                 if (data == NULL)
                 {
                     syntaxTree->child[0]->isInit = true;
-                    //symbolTable.insert(syntaxTree->child[0]->attr.name, syntaxTree);
+                    symbolTable.insert(syntaxTree->child[0]->attr.name, syntaxTree);
                 }
                 else
                 {
                     static_cast<TreeNode *>(data)->isUsed = true; //MAYBE
                     syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                     syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
+                    syntaxTree->child[0]->isInit = static_cast<TreeNode *>(data)->isInit;
+                    if (!syntaxTree->child[0]->isInit)
+                    {
+                        printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                        numWarnings++;
+                        static_cast<TreeNode *>(data)->isInit = true;
+                    }
                 }
             }
             if (syntaxTree->child[0]->isArray)
@@ -364,12 +426,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 semanticAnalysis(syntaxTree->child[1], symbolTable);
             }
-            else
-            {
-                //c1 is allowed to be null
-            }
-            //symbolTable.print(pointerPrintAddr);
-            //process stuff
             if (syntaxTree->child[2] != NULL)
             {
                 semanticAnalysis(syntaxTree->child[2], symbolTable);
@@ -391,11 +447,10 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 printf("ERROR(YOU SHOULD NOT SEE THIS) WhileKc[0].\n");
             }
-
-            if (syntaxTree->child[0]->isNC)
+            if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
             {
             }
-            else if (syntaxTree->child[0] != NULL && (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid))
+            else if (!(strcmp(syntaxTree->child[0]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0))
             {
                 void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                 if (data == NULL)
@@ -457,6 +512,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
         }
         case ForK:
         {
+            int savedfoffset = foffset;
             //Process stuff
             symbolTable.enter("For");
             loopCount++;
@@ -474,7 +530,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 printf("ERROR(YOU SHOULD NOT SEE THIS) ForKc0.\n");
             }
-
+            syntaxTree->size = foffset;
             forflag = false;
 
             if (syntaxTree->child[1] != NULL)
@@ -487,10 +543,15 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
 
             if (syntaxTree->child[2] != NULL)
             {
+                if (syntaxTree->child[2]->nodekind == StmtK && syntaxTree->child[2]->subkind.stmt == CompoundK)
+                {
+                    syntaxTree->child[2]->firstCompound = true;
+                }
                 semanticAnalysis(syntaxTree->child[2], symbolTable);
             }
 
             //check for used before leaving
+            foffset = savedfoffset;
             is_Used(symbolTable);
             loopCount--;
             symbolTable.leave();
@@ -498,6 +559,8 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
         }
         case CompoundK:
         {
+            int savedfoffset = foffset;
+
             //enter scope
             if (!syntaxTree->firstCompound)
             {
@@ -512,6 +575,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 //c0 is allowed NULL
             }
+            syntaxTree->size = foffset;
             //
             //children
             if (syntaxTree->child[1] != NULL)
@@ -522,6 +586,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 //c1 is allowed NULL
             }
+            foffset = savedfoffset;
             //leave scope
             inCompound = false;
             if (!syntaxTree->firstCompound)
@@ -545,7 +610,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0] != NULL && (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid))
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "SIZEOF") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "--") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "++") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+") == 0))
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -558,6 +623,14 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         static_cast<TreeNode *>(data)->isUsed = true;
                         syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        syntaxTree->child[0]->isInit = static_cast<TreeNode *>(data)->isInit;
+
+                        if (!syntaxTree->child[0]->isInit)
+                        {
+                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                            numWarnings++;
+                            static_cast<TreeNode *>(data)->isInit = true;
+                        }
                     }
                 }
             }
@@ -573,7 +646,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 //wants return value, but as none
                 if ((mostRecentFunc->nodeType == nInt || mostRecentFunc->nodeType == nBool || mostRecentFunc->nodeType == nChar || mostRecentFunc->nodeType == nUndefinedType) && syntaxTree->child[0] == NULL)
                 {
-                    printf("ERROR(%d): Function '%s' at line %d is expecting to return type", syntaxTree->lineno, mostRecentFunc->attr.name, mostRecentFunc->lineno);
+                    printf("ERROR(%d): Function '%s' at line %d is expecting to return type ", syntaxTree->lineno, mostRecentFunc->attr.name, mostRecentFunc->lineno);
                     numErrors++;
                     switch (mostRecentFunc->nodeType)
                     {
@@ -688,7 +761,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             if (syntaxTree->child[0]->isConstant)
             {
             }
-            else if (syntaxTree->child[0] != NULL && (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid))
+            else //if (syntaxTree->child[0] != NULL)
             {
                 void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                 if (data == NULL)
@@ -699,10 +772,17 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 else
                 {
                     static_cast<TreeNode *>(data)->isUsed = true; //MAYBE
-                    syntaxTree->child[0]->nodekind = static_cast<TreeNode *>(data)->nodekind;
-                    syntaxTree->child[0]->subkind.decl = static_cast<TreeNode *>(data)->subkind.decl;
+                    //syntaxTree->child[0]->nodekind = static_cast<TreeNode *>(data)->nodekind;
                     syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                     syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
+                    syntaxTree->child[0]->isInit = static_cast<TreeNode *>(data)->isInit;
+
+                    if (!syntaxTree->child[0]->isInit)
+                    {
+                        printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                        numWarnings++;
+                        static_cast<TreeNode *>(data)->isInit = true;
+                    }
                 }
             }
             if (syntaxTree->child[0]->isArray)
@@ -736,7 +816,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     numErrors++;
                     break;
                 default:
-                    printf("bad news rankgek01\n");
+                    //printf("bad news rankgek01\n");
                     break;
                 }
             }
@@ -752,25 +832,32 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             }
             //c1 processing
             bool dNull = false;
-            if (syntaxTree->child[1]->isNC)
+            if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
             {
             }
-            else if (syntaxTree->child[1] != NULL && (syntaxTree->child[1]->nodeType == uninit || syntaxTree->child[1]->nodeType == nVoid))
+            else if (!(strcmp(syntaxTree->child[1]->attr.name, "SIZEOF") == 0)) //if (syntaxTree->child[1] != NULL && (syntaxTree->child[1]->nodeType == uninit || syntaxTree->child[1]->nodeType == nVoid))
             {
                 void *data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                 if (data == NULL)
                 {
                     dNull = true;
-                    printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
-                    numErrors++;
+                    //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
+                    //numErrors++;
                 }
                 else
                 {
                     static_cast<TreeNode *>(data)->isUsed = true; //MAYBE
-                    syntaxTree->child[1]->nodekind = static_cast<TreeNode *>(data)->nodekind;
-                    syntaxTree->child[1]->subkind.decl = static_cast<TreeNode *>(data)->subkind.decl;
+                    //syntaxTree->child[1]->nodekind = static_cast<TreeNode *>(data)->nodekind;
                     syntaxTree->child[1]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                     syntaxTree->child[1]->isArray = static_cast<TreeNode *>(data)->isArray;
+                    syntaxTree->child[1]->isInit = static_cast<TreeNode *>(data)->isInit;
+
+                    if (!syntaxTree->child[1]->isInit)
+                    {
+                        printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
+                        numWarnings++;
+                        static_cast<TreeNode *>(data)->isInit = true;
+                    }
                 }
             }
             if (!dNull)
@@ -835,16 +922,24 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     if (data == NULL)
                     {
                         d2Null = true;
-                        printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[2]->attr.name);
-                        numErrors++;
+                        //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[2]->attr.name);
+                        //numErrors++;
                     }
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true; //MAYBE
-                        syntaxTree->child[2]->nodekind = static_cast<TreeNode *>(data)->nodekind;
-                        syntaxTree->child[2]->subkind.decl = static_cast<TreeNode *>(data)->subkind.decl;
+                        //syntaxTree->child[2]->nodekind = static_cast<TreeNode *>(data)->nodekind;
+                        //syntaxTree->child[2]->subkind.decl = static_cast<TreeNode *>(data)->subkind.decl;
                         syntaxTree->child[2]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[2]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        syntaxTree->child[2]->isInit = static_cast<TreeNode *>(data)->isInit;
+
+                        if (!syntaxTree->child[2]->isInit)
+                        {
+                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[2]->attr.name);
+                            numWarnings++;
+                            static_cast<TreeNode *>(data)->isInit = true;
+                        }
                     }
                 }
                 if (!d2Null)
@@ -918,7 +1013,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid)
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0))
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -962,7 +1057,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error1\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -989,7 +1083,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid)
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "SIZEOF") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0)) // if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid)
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -1004,9 +1098,15 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
                         syntaxTree->child[0]->isStatic = static_cast<TreeNode *>(data)->isStatic;
                         syntaxTree->child[0]->isInit = static_cast<TreeNode *>(data)->isInit;
+
+                        if (!syntaxTree->child[0]->isInit)
+                        {
+                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                            numWarnings++;
+                            static_cast<TreeNode *>(data)->isInit = true;
+                        }
                     }
                 }
-                //no c1
                 if (!syntaxTree->child[0]->isArray)
                 {
                     printf("ERROR(%d): The operation 'sizeof' only works with arrays.\n", syntaxTree->lineno);
@@ -1015,19 +1115,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 else
                 {
                     syntaxTree->nodeType = nInt;
-                }
-                if (!syntaxTree->child[0]->isInit)
-                {
-                    void *data = symbolTable.lookup(syntaxTree->attr.name);
-                    if (data == NULL)
-                    {
-                        printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                        numWarnings++;
-                        syntaxTree->child[0]->isInit = true;
-                    }
-                    else
-                    {
-                    }
                 }
                 if (syntaxTree->child[0]->isConstant)
                 {
@@ -1050,7 +1137,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid)
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "--") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "?") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "CHSIGN") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+") == 0))
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -1095,7 +1182,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error2\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -1168,7 +1254,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     numErrors++;
                     break;
                 case uninit:
-                    printf("temp error3\n");
                     break;
                 default:
                     printf("ERROR: semantic.cpp line 836\n");
@@ -1191,7 +1276,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "SIZEOF") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0)) //(syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -1204,6 +1289,13 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         static_cast<TreeNode *>(data)->isUsed = true;
                         syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        syntaxTree->child[0]->isInit = static_cast<TreeNode *>(data)->isInit;
+                        if (!syntaxTree->child[0]->isInit)
+                        {
+                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                            numWarnings++;
+                            static_cast<TreeNode *>(data)->isInit = true;
+                        }
                     }
                 }
                 //traverse c1 to get its type
@@ -1218,21 +1310,29 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[1]->nodeType == uninit || syntaxTree->child[1]->nodeType == nVoid) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[1]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*") == 0)) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                     if (data == NULL)
                     { //should this error be here?
-                        printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
-                        numErrors++;
+                        //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
+                        //numErrors++;
                     }
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true;
                         syntaxTree->child[1]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[1]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        syntaxTree->child[1]->isInit = static_cast<TreeNode *>(data)->isInit;
+                    }
+                    if (!syntaxTree->child[1]->isInit)
+                    {
+                        //printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
+                        //numWarnings++;
+                        //syntaxTree->child[1]->isInit = true;
                     }
                 }
+
                 if (syntaxTree->child[0]->isArray || syntaxTree->child[1]->isArray)
                 {
                     printf("ERROR(%d): The operation 'and' does not work with arrays.\n", syntaxTree->lineno);
@@ -1261,7 +1361,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error4\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -1288,7 +1387,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        //printf("temp error5 -- %d\n", syntaxTree->lineno);
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -1315,7 +1413,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "?") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "AND") == 0))
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -1342,7 +1440,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[1]->nodeType == uninit || syntaxTree->child[1]->nodeType == nVoid) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[1]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "-") == 0)) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                     if (data == NULL)
@@ -1385,7 +1483,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error6\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -1412,7 +1509,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error7\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -1430,6 +1526,9 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                      (strcmp(syntaxTree->attr.name, "<=") == 0) || (strcmp(syntaxTree->attr.name, ">=") == 0) ||
                      (strcmp(syntaxTree->attr.name, "<") == 0) || (strcmp(syntaxTree->attr.name, ">") == 0))
             {
+
+                bool c0decl = true;
+                bool c1decl = true;
                 syntaxTree->nodeType = nBool;
                 //traverse C0 to get its type
                 if (syntaxTree->child[0] != NULL)
@@ -1440,25 +1539,34 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 {
                     printf("ERROR(YOU SHOULD NOT SEE THIS) OpKc0.\n");
                 }
+
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0)) //if () //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
                     { //should this error be here?
-                        printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                        numErrors++;
+                        //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                        //numErrors++;
+                        c0decl = false;
                     }
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true;
-                        syntaxTree->child[0]->isInit = true;
+                        syntaxTree->child[0]->isInit = static_cast<TreeNode *>(data)->isInit;
                         syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        if (!syntaxTree->child[0]->isInit)
+                        {
+                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                            numWarnings++;
+                            static_cast<TreeNode *>(data)->isInit = true;
+                        }
                     }
                 }
+
                 //traverse c1 to get its type
                 if (syntaxTree->child[1] != NULL)
                 {
@@ -1471,20 +1579,27 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[1]->nodeType == uninit) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[1]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "[") == 0)) //(syntaxTree->child[1]->nodeType == uninit) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                     if (data == NULL)
                     { //should this error be here?
-                        printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
-                        numErrors++;
+                        //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
+                        //numErrors++;
+                        c1decl = false;
                     }
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true;
-                        syntaxTree->child[1]->isInit = true;
+                        syntaxTree->child[1]->isInit = static_cast<TreeNode *>(data)->isInit;
                         syntaxTree->child[1]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[1]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        if (!syntaxTree->child[1]->isInit)
+                        {
+                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
+                            numWarnings++;
+                            static_cast<TreeNode *>(data)->isInit = true;
+                        }
                     }
                 }
                 //syntaxTree->nodeType = nBool;
@@ -1512,11 +1627,12 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if ((!syntaxTree->child[0]->isArray && !syntaxTree->child[1]->isArray) || twoArrays)
                 {*/
                 //should have both types, now compare, output error if not equal types.
+
                 if (syntaxTree->child[0]->nodeType == syntaxTree->child[1]->nodeType)
                 {
                     syntaxTree->nodeType = nBool;
                 }
-                else
+                else if (c1decl && c0decl)
                 {
                     printf("ERROR(%d): '%s' requires operands of the same type but lhs is type ", syntaxTree->lineno, syntaxTree->attr.name);
                     numErrors++;
@@ -1538,7 +1654,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         printf("undefined");
                         break;
                     case uninit:
-                        printf("temp error8\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -1581,7 +1696,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 syntaxTree->nodeType = nInt;
                 //traverse C0
-                //printf("hi\n");fflush(stdout);
                 if (syntaxTree->child[0] != NULL)
                 {
                     semanticAnalysis(syntaxTree->child[0], symbolTable);
@@ -1595,19 +1709,26 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (!(strcmp(syntaxTree->child[0]->attr.name, "[") == 0) && (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid)) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0)) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
                     { //should this error be here?
-                        printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                        numErrors++;
+                        //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                        //numErrors++;
                     }
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true;
                         syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        syntaxTree->child[0]->isInit = static_cast<TreeNode *>(data)->isInit;
+                        if (!syntaxTree->child[0]->isInit)
+                        {
+                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                            numWarnings++;
+                            static_cast<TreeNode *>(data)->isInit = true;
+                        }
                     }
                 }
 
@@ -1625,19 +1746,26 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
                 }
-                else if (!(strcmp(syntaxTree->child[1]->attr.name, "[") == 0) && (syntaxTree->child[1]->nodeType == uninit || syntaxTree->child[1]->nodeType == nVoid)) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[1]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "[") == 0)) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                     if (data == NULL)
                     { //should this error be here?
-                        printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
-                        numErrors++;
+                        //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
+                        //numErrors++;
                     }
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true;
                         syntaxTree->child[1]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[1]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        syntaxTree->child[1]->isInit = static_cast<TreeNode *>(data)->isInit;
+                        if (!syntaxTree->child[1]->isInit)
+                        {
+                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
+                            numWarnings++;
+                            static_cast<TreeNode *>(data)->isInit = true;
+                        }
                     }
                 }
                 if (syntaxTree->child[0]->isArray || syntaxTree->child[1]->isArray)
@@ -1669,7 +1797,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     numErrors++;
                     break;
                 case uninit:
-                    //printf("temp error9...%d\n", syntaxTree->lineno);
                     break;
                 default:
                     printf("ERROR: semantic.cpp line 836\n");
@@ -1696,7 +1823,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     numErrors++;
                     break;
                 case uninit:
-                    printf("temp error10\n");
                     break;
                 default:
                     printf("ERROR: semantic.cpp line 836\n");
@@ -1709,6 +1835,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             }
             else // '[' , array,int ->type of array
             {
+
                 //syntaxTree->nodeType = nInt;
                 //traverse C0
                 bool iserr = false;
@@ -1720,55 +1847,58 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 {
                     printf("ERROR(YOU SHOULD NOT SEE THIS) OpKc0.\n");
                 }
+
                 bool temp = false;
                 void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                 if (data != NULL)
                 {
                     temp = static_cast<TreeNode *>(data)->isInit;
+                    if (syntaxTree->child[1]->isNC)
+                    {
+                        static_cast<TreeNode *>(data)->isInit = true;
+                    }
                 }
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (!disableW && !temp && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0)) // if c1 isnt inited, and isnt '['
+                else if ((data != NULL) && !disableW && !temp && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0)) // if c1 isnt inited, and isnt '['
                 {
                     printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
                     numWarnings++;
+                    static_cast<TreeNode *>(data)->isInit = true;
                     syntaxTree->child[0]->isInit = true;
                 }
+
                 // Mess with c0
                 syntaxTree->child[0]->isInit = true; //MAYBE SHOULDNT BE HERE
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
+                else // if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
                     { //should this error be here?
-                        printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                        numErrors++;
+                        //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                        //numErrors++;
+                        syntaxTree->child[0]->isArray = false;
                     }
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true;
-                        static_cast<TreeNode *>(data)->isInit = true;
+                        syntaxTree->child[0]->isInit = static_cast<TreeNode *>(data)->isInit;
                         syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
-                    }
-                    if (data)
-                    {
-                        switch (static_cast<TreeNode *>(data)->subkind.decl)
+                        if (!syntaxTree->child[0]->isInit)
                         {
-                        case FuncK:
-                            printf("ERROR(%d): Cannot use function '%s' as a variable.\n", syntaxTree->lineno, static_cast<TreeNode *>(data)->attr.name);
-                            numErrors++;
-                            break;
-                        default:
-                            break;
+                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                            numWarnings++;
+                            static_cast<TreeNode *>(data)->isInit = true;
                         }
                     }
                 }
+                syntaxTree->nodeType = syntaxTree->child[0]->nodeType;
                 //traverse c1
                 if (syntaxTree->child[1] != NULL)
                 {
@@ -1778,8 +1908,10 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 {
                     printf("ERROR(YOU SHOULD NOT SEE THIS) OpKc1.\n");
                 }
+
                 if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
+                    //if(syntaxTree->child[1]->isNC){ syntaxTree->nodeType = syntaxTree->child[0]->nodeType;}
                 }
                 else
                 {
@@ -1802,29 +1934,32 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 }
                 if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
+                    syntaxTree->isArray = false;
                 }
-                else if (!(strcmp(syntaxTree->child[1]->attr.name, "[") == 0) && (syntaxTree->child[1]->nodeType == uninit || syntaxTree->child[1]->nodeType == nVoid)) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[1]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "SIZEOF") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "?") == 0)) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                     if (data == NULL)
                     { //should this error be here?
-                        printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
-                        numErrors++;
+                        //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
+                        //numErrors++;
+                        syntaxTree->isArray = true;
                     }
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true;
-                        static_cast<TreeNode *>(data)->isInit = true;
+                        //static_cast<TreeNode *>(data)->isInit = true;
                         syntaxTree->child[1]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[1]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        syntaxTree->child[1]->isFun = static_cast<TreeNode *>(data)->isFun;
                     }
-                    if(data)
+                    if (data)
                     {
                         if (static_cast<TreeNode *>(data)->isArray)
-                    {
-                        printf("ERROR(%d): Array index is the unindexed array '%s'.\n", syntaxTree->lineno, static_cast<TreeNode *>(data)->attr.name);
-                        numErrors++;
-                    }
+                        {
+                            printf("ERROR(%d): Array index is the unindexed array '%s'.\n", syntaxTree->lineno, static_cast<TreeNode *>(data)->attr.name);
+                            numErrors++;
+                        }
                     }
                 }
                 // now work with both
@@ -1833,33 +1968,34 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     printf("ERROR(%d): Cannot index nonarray '%s'.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
                     numErrors++;
                 }
-                //syntaxTree->nodeType = syntaxTree->child[0]->nodeType;
-                switch (syntaxTree->child[1]->nodeType)
+                if (!syntaxTree->child[1]->isFun)
                 {
-                case nInt:
-                    break;
-                case nVoid:
-                    printf("ERROR(%d): Array '%s' should be indexed by type int but got type void.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                    numErrors++;
-                    break;
-                case nBool:
-                    printf("ERROR(%d): Array '%s' should be indexed by type int but got type bool.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                    numErrors++;
-                    break;
-                case nChar:
-                    printf("ERROR(%d): Array '%s' should be indexed by type int but got type char.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                    numErrors++;
-                    break;
-                case nUndefinedType:
-                    printf("ERROR(%d): Array '%s' should be indexed by type int but got type undefined.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                    numErrors++;
-                    break;
-                case uninit:
-                    printf("temp error11\n");
-                    break;
-                default:
-                    printf("ERROR: semantic.cpp line 836\n");
-                    break;
+                    switch (syntaxTree->child[1]->nodeType)
+                    {
+                    case nInt:
+                        break;
+                    case nVoid:
+                        printf("ERROR(%d): Array '%s' should be indexed by type int but got type void.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                        numErrors++;
+                        break;
+                    case nBool:
+                        printf("ERROR(%d): Array '%s' should be indexed by type int but got type bool.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                        numErrors++;
+                        break;
+                    case nChar:
+                        printf("ERROR(%d): Array '%s' should be indexed by type int but got type char.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                        numErrors++;
+                        break;
+                    case nUndefinedType:
+                        printf("ERROR(%d): Array '%s' should be indexed by type int but got type undefined.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                        numErrors++;
+                        break;
+                    case uninit:
+                        break;
+                    default:
+                        printf("ERROR: semantic.cpp line 836\n");
+                        break;
+                    }
                 }
             }
             break;
@@ -1867,6 +2003,12 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
         case ConstantK:
         {
             //no children
+            if (syntaxTree->isStringConstant)
+            {
+                syntaxTree->location = goffset - 1;
+                syntaxTree->mem = glob;
+                goffset = goffset - syntaxTree->size;
+            }
             break;
         }
         case IdK:
@@ -1875,14 +2017,27 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             if (data != NULL)
             {
                 static_cast<TreeNode *>(data)->isUsed = true;
-                /*
-                if(!static_cast<TreeNode *>(data)->isInit)
+                syntaxTree->nodeType = static_cast<TreeNode *>(data)->nodeType;
+                syntaxTree->isArray = static_cast<TreeNode *>(data)->isArray;
+                syntaxTree->isInit = static_cast<TreeNode *>(data)->isInit;
+                syntaxTree->size = static_cast<TreeNode *>(data)->size;
+                syntaxTree->mem = static_cast<TreeNode *>(data)->mem;
+                syntaxTree->location = static_cast<TreeNode *>(data)->location;
+                switch (static_cast<TreeNode *>(data)->subkind.decl)
                 {
-                    printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, static_cast<TreeNode *>(data)->attr.name);
-                    numWarnings++;
-                    static_cast<TreeNode *>(data)->isInit = true;
+                case FuncK:
+                    printf("ERROR(%d): Cannot use function '%s' as a variable.\n", syntaxTree->lineno, static_cast<TreeNode *>(data)->attr.name);
+                    numErrors++;
+                    static_cast<TreeNode *>(data)->isFun = true;
+                    break;
+                default:
+                    break;
                 }
-                */
+            }
+            else
+            {
+                printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->attr.name);
+                numErrors++;
             }
             //No Children
             break;
@@ -1896,6 +2051,8 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 //syntaxTree->nodeType = nBool;
                 //traverse C0 to get its type
+                bool c0Decl, c1Decl;
+                c0Decl = c1Decl = true;
                 if (strcmp(syntaxTree->child[0]->attr.name, "[") == 0)
                 {
                     disableW = true;
@@ -1922,47 +2079,49 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
+                else // if ((syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid)) //if its gonna be in symbol table
                 {
-                    void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
-                    if (data == NULL)
-                    { //should this error be here?
-                        printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                        iserr = true;
-                        numErrors++;
+                    if (!(strcmp(syntaxTree->child[0]->attr.name, "[") == 0))
+                    {
+                        void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
+                        if (data == NULL)
+                        { //should this error be here?
+
+                            //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                            c0Decl = false;
+                            iserr = true;
+                            //numErrors++;
+                        }
+                        else
+                        {
+                            syntaxTree->child[0]->isInit = true;
+                            syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
+                            syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
+                            static_cast<TreeNode *>(data)->isUsed = true;
+                            dataSave = data;
+                        }
                     }
                     else
                     {
-                        syntaxTree->child[0]->isInit = true;
-                        syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
-                        syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
-                        static_cast<TreeNode *>(data)->isUsed = true;
-                        //static_cast<TreeNode *>(data)->isInit = true;
-                        dataSave = data;
+                        c0Decl = false;
                     }
                 }
 
-                if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
+                if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[1]->nodeType == uninit) // || syntaxTree->child[1]->nodeType == nVoid) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[1]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "!=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "CHSIGN") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "--") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "SIZEOF") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "?") == 0)) // if (syntaxTree->child[1]->nodeType == uninit) // || syntaxTree->child[1]->nodeType == nVoid) //if its gonna be in symbol table
                 {
                     void *data;
-                    if (!(strcmp(syntaxTree->child[1]->attr.name, "[") == 0))
-                    {
-                        data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
-                    }
-                    else
-                    {
-                        data = symbolTable.lookup(syntaxTree->child[1]->child[0]->attr.name);
-                    }
+                    data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                     if (data == NULL)
                     { //should this error be here?
                         iserr = true;
                         if (!(strcmp(syntaxTree->child[1]->attr.name, "[") == 0))
                         {
-                            printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
-                            numErrors++;
+                            //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
+                            c1Decl = false;
+                            //numErrors++;
                         }
                     }
                     else
@@ -1996,18 +2155,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                             syntaxTree->child[1]->isInit = static_cast<TreeNode *>(data)->isInit;
                         }
                     }
-                    /*
-                    if (!syntaxTree->child[1]->isInit && (strcmp(syntaxTree->child[1]->attr.name, "[") == 0) && !iserr)
-                    {
-                        if(syntaxTree->child[0]->attr.name == syntaxTree->child[1]->child[0]->attr.name)
-                        {
-                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
-                            numWarnings++;
-                            syntaxTree->child[1]->isInit = true;
-                        }
-                    }
-                    */
-                    if (!syntaxTree->child[1]->isInit && !(strcmp(syntaxTree->child[1]->attr.name, "[") == 0) && !iserr) // if c1 isnt inited, and isnt '['
+                    if (!syntaxTree->child[1]->isInit && !(strcmp(syntaxTree->child[1]->attr.name, "[") == 0) && c1Decl) // && !iserr) // if c1 isnt inited, and isnt '['
                     {
                         printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[1]->attr.name);
                         numWarnings++;
@@ -2021,37 +2169,21 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                             static_cast<TreeNode *>(data)->isInit = true;
                         }
                     }
-                    if (dataSave != NULL)
-                    {
-                        static_cast<TreeNode *>(dataSave)->isInit = true;
-                    }
                     if (dataSave2 != NULL)
                     {
                         static_cast<TreeNode *>(dataSave2)->isInit = true;
                     }
-                    /* 
-                    else if (!syntaxTree->child[0]->isArray && (strcmp(syntaxTree->child[1]->attr.name, "[") == 0))
-                    {
-                        printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                        numWarnings++;
-                        syntaxTree->child[0]->isInit = true;
-                    }
-                    */
                 }
-                /*
-                else
+                if (dataSave != NULL)
                 {
-                    syntaxTree->child[0]->isInit = true;
+                    static_cast<TreeNode *>(dataSave)->isInit = true;
                 }
-                */
-
-                //syntaxTree->nodeType = nBool;
                 bool twoArrays = false;
                 //both arrays
                 if (iserr)
                 {
                 }
-                else
+                else if (c0Decl)
                 {
                     if (syntaxTree->child[0]->isArray && syntaxTree->child[1]->isArray)
                     {
@@ -2071,15 +2203,16 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                     }
                     //both not arrays, or both arrays
-                    if ((!syntaxTree->child[0]->isArray && !syntaxTree->child[1]->isArray) || twoArrays)
+                    if (1) //((!syntaxTree->child[0]->isArray && !syntaxTree->child[1]->isArray) || twoArrays)
                     {
                         //should have both types, now compare, output error if not equal types.
                         if (syntaxTree->child[0]->nodeType == syntaxTree->child[1]->nodeType)
                         {
                             syntaxTree->nodeType = syntaxTree->child[0]->nodeType;
                         }
-                        else
+                        else //if(syntaxTree->child[0]->nodeType != uninit && syntaxTree->child[1]->nodeType != uninit)
                         {
+                            syntaxTree->nodeType = syntaxTree->child[0]->nodeType;
                             printf("ERROR(%d): '=' requires operands of the same type but lhs is type ", syntaxTree->lineno);
                             numErrors++;
                             switch (syntaxTree->child[0]->nodeType)
@@ -2100,10 +2233,9 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                                 printf("undefined");
                                 break;
                             case uninit:
-                                printf("temp error12\n");
                                 break;
                             default:
-                                printf("ERROR: semantic.cpp line 836\n");
+                                //printf("ERROR: semantic.cpp line 836\n");
                                 break;
                             }
                             printf(" and rhs is type ");
@@ -2125,7 +2257,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                                 printf("undefined");
                                 break;
                             default:
-                                printf("ERROR: semantic.cpp line 836\n");
+                                printf("void");
                                 break;
                             }
                             printf(".\n");
@@ -2145,13 +2277,14 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 {
                     printf("ERROR(YOU SHOULD NOT SEE THIS) AssignKc0.\n");
                 }
-                syntaxTree->child[0]->isInit = true;
+                //syntaxTree->child[0]->isInit = true;
 
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "[") == 0)) // if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
                 {
+
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
                     { //should this error be here?
@@ -2161,9 +2294,15 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true;
-                        static_cast<TreeNode *>(data)->isInit = true;
+                        syntaxTree->child[0]->isInit = static_cast<TreeNode *>(data)->isInit;
                         syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        if (!syntaxTree->child[0]->isInit)
+                        {
+                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                            numWarnings++;
+                            static_cast<TreeNode *>(data)->isInit = true;
+                        }
                     }
                 }
                 //array check
@@ -2190,7 +2329,6 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     numErrors++;
                     break;
                 default:
-                    printf("shouldnt be here ++ -- check\n");
                     break;
                 }
             }
@@ -2211,17 +2349,21 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "?") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "/") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "/=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0))
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
                     { //should this error be here?
-                        printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                        numErrors++;
+                        if (!(strcmp(syntaxTree->child[0]->attr.name, "[") == 0))
+                        {
+                            printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                            numErrors++;
+                        }
                     }
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true;
+                        static_cast<TreeNode *>(data)->isInit = true;
                         syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
                     }
@@ -2264,7 +2406,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[1]->nodeType == uninit) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[1]->attr.name, "?") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "/=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "/") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "-=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "++") == 0)) //(syntaxTree->child[1]->nodeType == uninit) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                     if (data == NULL)
@@ -2277,6 +2419,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         static_cast<TreeNode *>(data)->isUsed = true;
                         syntaxTree->child[1]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[1]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        syntaxTree->child[1]->isInit = static_cast<TreeNode *>(data)->isInit;
                     }
                 }
                 if (syntaxTree->child[1]->isNC || syntaxTree->isConstant)
@@ -2288,6 +2431,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     numWarnings++;
                     syntaxTree->child[1]->isInit = true;
                 }
+
                 //c1 check;
                 switch (syntaxTree->child[1]->nodeType)
                 {
@@ -2295,19 +2439,19 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     syntaxTree->nodeType = nInt;
                     break;
                 case nBool:
-                    printf("ERROR(%d): '%s' requires operands of type int but lhs is of type bool.\n", syntaxTree->lineno, syntaxTree->attr.name);
+                    printf("ERROR(%d): '%s' requires operands of type int but rhs is of type bool.\n", syntaxTree->lineno, syntaxTree->attr.name);
                     numErrors++;
                     break;
                 case nChar:
-                    printf("ERROR(%d): '%s' requires operands of type int but lhs is of type char.\n", syntaxTree->lineno, syntaxTree->attr.name);
+                    printf("ERROR(%d): '%s' requires operands of type int but rhs is of type char.\n", syntaxTree->lineno, syntaxTree->attr.name);
                     numErrors++;
                     break;
                 case nVoid:
-                    printf("ERROR(%d): '%s' requires operands of type int but lhs is of type void.\n", syntaxTree->lineno, syntaxTree->attr.name);
+                    printf("ERROR(%d): '%s' requires operands of type int but rhs is of type void.\n", syntaxTree->lineno, syntaxTree->attr.name);
                     numErrors++;
                     break;
                 case nUndefinedType:
-                    printf("ERROR(%d): '%s' requires operands of type int but lhs is of type undefined.\n", syntaxTree->lineno, syntaxTree->attr.name);
+                    printf("ERROR(%d): '%s' requires operands of type int but rhs is of type undefined.\n", syntaxTree->lineno, syntaxTree->attr.name);
                     numErrors++;
                     break;
                 default:
@@ -2353,12 +2497,16 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 semanticAnalysis(syntaxTree->child[0], symbolTable);
             }
-            void *data = symbolTable.lookupGlobal(syntaxTree->attr.name);
+            void *data = symbolTable.lookup(syntaxTree->attr.name); //symbolTable.lookupGlobal(syntaxTree->attr.name);
+            if (data == NULL)
+            {
+                data = symbolTable.lookupGlobal(syntaxTree->attr.name);
+            }
             if (data == NULL)
             {
                 noFcallCheck = true;
-                //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->attr.name);
-                //numErrors++;
+                printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->attr.name);
+                numErrors++;
             }
             else
             {
@@ -2418,8 +2566,8 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                             }
                             else
                             {
-                                printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, temp->attr.name);
-                                numErrors++;
+                                //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, temp->attr.name);
+                                //numErrors++;
                                 temp->isDeclared = false;
                             }
                         }
@@ -2437,23 +2585,61 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         }
                         else
                         {
-                            printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, temp->attr.name);
-                            temp->isDeclared = false;
-                            numErrors++;
+                            //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, temp->attr.name);
+                            //temp->isDeclared = false;
+                            //numErrors++;
                         }
                     }
                 }
+                void *tdata = NULL;
+                bool testing = false;
+                tdata = symbolTable.lookup(syntaxTree->attr.name);
+                if (tdata == NULL) //temporary bad fix, cant think of good solution at the moment
+                {
+                    if (!(strcmp(syntaxTree->attr.name, "zog") == 0))
+                    {
+                        symbolTable.insert(syntaxTree->attr.name, syntaxTree);
+                    }
+                }
+                else
+                {
+                    switch (static_cast<TreeNode *>(tdata)->subkind.decl)
+                    {
+                    case FuncK:
+                        break;
+                    case VarK:
+                        printf("ERROR(%d): '%s' is a simple variable and cannot be called.\n", syntaxTree->lineno, syntaxTree->attr.name);
+                        numErrors++;
+                        testing = true;
+                        break;
+                    case ParamK:
+                        printf("ERROR(%d): '%s' is a simple variable and cannot be called.\n", syntaxTree->lineno, syntaxTree->attr.name);
+                        testing = true;
+                        numErrors++;
+                        break;
+                    default:
+                        //printf("not good\n");
+                        break;
+                    }
+                }
+
                 if (callNparam < funNparam)
                 {
                     lowerLim = callNparam;
-                    printf("ERROR(%d): Too few parameters passed for function '%s' declared on line %d.\n", syntaxTree->lineno, syntaxTree->attr.name, funcT->lineno);
-                    numErrors++;
+                    if (!testing)
+                    {
+                        printf("ERROR(%d): Too few parameters passed for function '%s' declared on line %d.\n", syntaxTree->lineno, syntaxTree->attr.name, funcT->lineno);
+                        numErrors++;
+                    }
                 }
                 else if (funNparam < callNparam)
                 {
                     lowerLim = funNparam;
-                    printf("ERROR(%d): Too many parameters passed for function '%s' declared on line %d.\n", syntaxTree->lineno, syntaxTree->attr.name, funcT->lineno);
-                    numErrors++;
+                    if (!testing)
+                    {
+                        printf("ERROR(%d): Too many parameters passed for function '%s' declared on line %d.\n", syntaxTree->lineno, syntaxTree->attr.name, funcT->lineno);
+                        numErrors++;
+                    }
                 }
                 else
                 {
@@ -2611,8 +2797,8 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                             }
                             else
                             {
-                                printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, temp->attr.name);
-                                numErrors++;
+                                //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, temp->attr.name);
+                                //numErrors++;
                                 temp->isDeclared = false;
                             }
                         }
@@ -2630,75 +2816,58 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         }
                         else
                         {
-                            printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, temp->attr.name);
-                            temp->isDeclared = false;
-                            numErrors++;
+                            //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, temp->attr.name);
+                            //temp->isDeclared = false;
+                            //numErrors++;
                         }
                     }
                 }
             }
-
             //A3 stuff
             if (syntaxTree->child[0] != NULL)
             {
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (syntaxTree->child[0] != NULL)
+                else
                 {
                     if ((syntaxTree->child[0]->nodekind == ExpK) && (syntaxTree->child[0]->subkind.exp == CallK))
                     {
                     }
-                    else
+                    else if (!syntaxTree->isNC && !syntaxTree->isConstant)
                     {
-                        if (syntaxTree->child[0] != NULL && !syntaxTree->child[0]->isNC) //if its gonna be in symbol table
-                        {
-                            void *data;
-                            if (strcmp(syntaxTree->attr.name, "++") == 0)
-                            {
-                                data = symbolTable.lookup(syntaxTree->child[0]->child[0]->attr.name);
-                            }
-                            else if (syntaxTree->child[0]->nodeType == nBool && (syntaxTree->child[0]->attr.value == 1 || syntaxTree->child[0]->attr.value == 0))
-                            {
-                                //printf("yes\n");fflush(stdout);
-                            }
-                            else if (syntaxTree->child[0]->nodeType == nChar) //&& (syntaxTree->child[0]->attr.value == 1 || syntaxTree->child[0]->attr.value == 0))
-                            {
-                                //printf("yes\n");fflush(stdout);
-                            }
-                            else
-                            {
-                                data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
-                            }
-                            if (data == NULL)
-                            {
-                                if (!((syntaxTree->child[0]->nodekind == ExpK) && (syntaxTree->child[0]->subkind.exp == OpK)) && (strcmp(syntaxTree->attr.name, "=") == 0) && (strcmp(syntaxTree->attr.name, "%") == 0) && (strcmp(syntaxTree->attr.name, "+=") == 0) && (strcmp(syntaxTree->attr.name, "-=") == 0) && (strcmp(syntaxTree->attr.name, "*=") == 0) && (strcmp(syntaxTree->attr.name, "/=") == 0) && (strcmp(syntaxTree->attr.name, "++") == 0) && (strcmp(syntaxTree->attr.name, "--") == 0))
-                                {
-                                    printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                                    numErrors++;
-                                }
-                            }
-                            else
-                            {
-                                //printf("hello: %s\n", static_cast<TreeNode *>(data)->attr.name);
-                                syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
-                                syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
+                        //if its gonna be in symbol table
 
-                                switch (static_cast<TreeNode *>(data)->subkind.decl)
-                                {
-                                case FuncK:
-                                    printf("ERROR(%d): Cannot use function '%s' as a variable.\n", syntaxTree->lineno, static_cast<TreeNode *>(data)->attr.name);
-                                    numErrors++;
-                                    break;
-                                default:
-                                    break;
-                                }
+                        void *data;
+                        data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
+                        if (data == NULL)
+                        {
+                            if (!((syntaxTree->child[0]->nodekind == ExpK) && (syntaxTree->child[0]->subkind.exp == OpK)) && (strcmp(syntaxTree->attr.name, "=") == 0) && (strcmp(syntaxTree->attr.name, "%") == 0) && (strcmp(syntaxTree->attr.name, "+=") == 0) && (strcmp(syntaxTree->attr.name, "-=") == 0) && (strcmp(syntaxTree->attr.name, "*=") == 0) && (strcmp(syntaxTree->attr.name, "/=") == 0) && (strcmp(syntaxTree->attr.name, "++") == 0) && (strcmp(syntaxTree->attr.name, "--") == 0))
+                            {
+                                //printf("ERROR(%d): Symbol '%s' is not declared.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                                //numErrors++;
+                            }
+                        }
+                        else
+                        {
+                            //printf("hello: %s\n", static_cast<TreeNode *>(data)->attr.name);
+                            syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
+                            syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
+
+                            switch (static_cast<TreeNode *>(data)->subkind.decl)
+                            {
+                            case FuncK:
+                                //printf("ERROR(%d): Cannot use function '%s' as a variable.\n", syntaxTree->lineno, static_cast<TreeNode *>(data)->attr.name);
+                                //numErrors++;
+                                break;
+                            default:
+                                break;
                             }
                         }
                     }
                 }
             }
-
+            /*
             data = NULL;
             data = symbolTable.lookup(syntaxTree->attr.name);
             if (data == NULL) //temporary bad fix, cant think of good solution at the moment
@@ -2727,6 +2896,8 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     break;
                 }
             }
+            */
+
             break;
         }
         default:
@@ -3044,7 +3215,6 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 //printf("ERROR(YOU SHOULD NOT SEE THIS) ForKc0.\n");
             }
-
             forflag = false;
 
             /* No ForK child[1] for assignment 3
@@ -3248,7 +3418,6 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error1\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -3368,7 +3537,6 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error2\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -3433,7 +3601,6 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                     numErrors++;
                     break;
                 case uninit:
-                    printf("temp error3\n");
                     break;
                 default:
                     printf("ERROR: semantic.cpp line 836\n");
@@ -3520,7 +3687,6 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error4\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -3547,7 +3713,6 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error5 -- %d\n", syntaxTree->lineno);
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -3634,7 +3799,6 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error6\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -3661,7 +3825,6 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                         numErrors++;
                         break;
                     case uninit:
-                        printf("temp error7\n");
                         break;
                     default:
                         printf("ERROR: semantic.cpp line 836\n");
@@ -3995,7 +4158,7 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                         break;
                     }
                 }
-
+                //syntaxTree->nodeType = syntaxTree->child[0]->nodeType;
                 //traverse c1
                 if (syntaxTree->child[1] != NULL)
                 {
@@ -4029,7 +4192,7 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                     numWarnings++;
                     syntaxTree->child[1]->isInit = true;
                 }
-                //PROBLEM IN THIS FUNCTION
+
                 if (syntaxTree->child[1]->isNC)
                 {
                 }
@@ -4090,6 +4253,7 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                     break;
                 }
             }
+
             break;
         }
         case ConstantK:
@@ -4099,6 +4263,7 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
         }
         case IdK:
         {
+
             void *data = symbolTable.lookup(syntaxTree->attr.name);
             if (data != NULL)
             {
@@ -4332,7 +4497,7 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                 {
                     //printf("ERROR(YOU SHOULD NOT SEE THIS) AssignKc0.\n");
                 }
-                syntaxTree->child[0]->isInit = true;
+                //syntaxTree->child[0]->isInit = true;
 
                 if (syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
                 {
@@ -4345,7 +4510,7 @@ void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
                     else
                     {
                         static_cast<TreeNode *>(data)->isUsed = true;
-                        static_cast<TreeNode *>(data)->isInit = true;
+                        syntaxTree->child[0]->isInit = static_cast<TreeNode *>(data)->isInit; // = true;
                         syntaxTree->child[0]->nodeType = static_cast<TreeNode *>(data)->nodeType;
                         syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
                     }

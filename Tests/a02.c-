@@ -1,0 +1,9 @@
+// C-S21
+main()
+{
+     int x;
+
+     output(982);
+     outnl();
+}
+

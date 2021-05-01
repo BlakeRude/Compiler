@@ -1,0 +1,13 @@
+// C-S21
+bool cat()
+{
+    return true;
+}
+
+main()
+{
+    bool x;
+
+    x = cat();
+    outputb(x);
+}

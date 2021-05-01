@@ -1,0 +1,7 @@
+// C-S21
+main(){
+    char yy:'a';
+    outputc(yy);
+    {
+    }
+}

@@ -1,0 +1,9 @@
+// C-S21
+main()
+{
+     int x;
+
+     x = 273;
+     output(x);
+}
+

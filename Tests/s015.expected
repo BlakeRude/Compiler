@@ -1,0 +1,8 @@
+WARNING(8): The variable 'load' seems not to be used.
+WARNING(8): The variable 'load-1' seems not to be used.
+Number of warnings: 2
+Number of errors: 0
+------------------------------------
+Loading file: s015.tm
+777 666
+Bye.

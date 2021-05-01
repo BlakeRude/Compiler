@@ -1,0 +1,20 @@
+// C-S21
+// testing static variables
+
+int goad:666;
+// load() is in global, int load is in local but statically allocated
+load()
+{
+    static int load;
+    {
+        static int goad:777;
+        output(goad);
+    }
+    output(goad);
+    outnl();
+}
+
+main()
+{
+    load();
+}

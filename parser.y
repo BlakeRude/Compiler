@@ -16,6 +16,7 @@
 #include "util.h"
 #include "symbolTable.h"
 #include "semantic.h"
+#include "yyerror.h"
 
 extern int yylex();
 extern FILE *yyin;
@@ -25,11 +26,15 @@ static TreeNode* IOtree;
 static SymbolTable savedsymbolTable;
 int numErrors=0;
 int numWarnings=0;
+int foffset=0;
+int goffset=0;
 #define YYERROR_VERBOSE
+/*
 void yyerror(const char *msg)
 {
       printf("ERROR(PARSER): %s\n", msg);
 }
+*/
 %}
 %union {
     ExpType etype;
@@ -39,7 +44,7 @@ void yyerror(const char *msg)
 }
 %token <tokenData> ID NUMCONST CHARCONST STRINGCONST KEYWORD INVALID BOOLCONST STATIC INT BOOL CHAR IF NOT THEN ELSE WHILE OR DO FOR TO BY RETURN BREAK ADDASS MINASS DIVASS MULASS INC DEC LEQ GEQ NEQ EQ MAX MIN ttrue ffalse ANDD
 %token <tokenData> '<' '>' '=' '*' '+' '-' '/' '%' ')' '(' ';' ':' '[' ']' '{' '}' ',' '?'
-%type <tree> program declList decl varDecl scopedVarDecl varDeclList varDeclInit varDeclId typeSpec funDecl parms parmList parmTypeList parmIdList parmId stmt matched unmatched expStmt compoundStmt matchediterStmt unmatchediterStmt returnStmt breakStmt localDecls stmtList iterRange exp simpleExp andExp unaryRelExp relExp relop minmaxExp minmaxop sumExp sumop mulExp mulop unaryExp unaryop factor mutable immutable call args argList constant
+%type <tree> program declList decl varDecl scopedVarDecl varDeclList varDeclInit varDeclId typeSpec funDecl parms parmList parmTypeList parmIdList parmId stmt matched unmatched expStmt compoundStmt matchediterStmt unmatchediterStmt returnStmt breakStmt localDecls stmtList iterRange exp assignop simpleExp andExp unaryRelExp relExp relop minmaxExp minmaxop sumExp sumop mulExp mulop unaryExp unaryop factor mutable immutable call args argList constant
 %%
 program         : declList
                     {
@@ -67,13 +72,11 @@ decl            : varDecl
                     { $$ = $1; }
                 | funDecl
                     { $$ = $1; }
+                | error
+                    { $$ = NULL; }
                 ;
 varDecl         : typeSpec varDeclList ';'
                     {
-                        //i tried dealing with typespec multiple ways
-                        //i think its best to just have it be a node with
-                        //relevent information
-                        
                         TreeNode* t1 = $1;      //typeSpec, has relevant typing info
                         TreeNode* t2 = $2;      //Our list of varDecl, go and set t1's type info to all siblings
                         if(t1 != NULL && t2 != NULL)
@@ -90,8 +93,13 @@ varDecl         : typeSpec varDeclList ';'
                             temp->declType = t1->declType;
                             temp->nodeType = t1->nodeType;
                         }
+                        yyerrok;
                         $$ = $2;
                     }
+                | error varDeclList ';'
+                    { $$ = NULL; yyerrok; }
+                | typeSpec error ';'
+                    { $$ = NULL; yyerrok; yyerrok; }
                 ;
 scopedVarDecl   : STATIC typeSpec varDeclList ';'
                     {
@@ -109,12 +117,15 @@ scopedVarDecl   : STATIC typeSpec varDeclList ';'
                                 //printf("sVD1: ",t1->attr.name);
                                 //temp->attr.name = t1->attr.name;
                                 temp->isStatic = true;
+                                temp->mem = stat;
                                 temp = temp->sibling;
                             }
                             temp->isStatic = true;
+                            temp->mem = stat;
                             temp->declType = t1->declType;
                             temp->nodeType = t1->nodeType;
                         }
+                        yyerrok;
                         $$ = $3;
                     }
                 | typeSpec varDeclList ';'
@@ -129,13 +140,16 @@ scopedVarDecl   : STATIC typeSpec varDeclList ';'
                                 temp->declType = t1->declType;
                                 temp->nodeType = t1->nodeType;
                                 temp = temp->sibling;
+                                temp->mem = loca;
                                 //printf("type lineno: %i\n", $1->lineno);
                                 //temp->lineno = $1->lineno;
                             }
                             temp->declType = t1->declType;
+                            temp->mem = loca;
                             temp->nodeType = t1->nodeType;
                             //temp = temp->sibling;
                         }
+                        yyerrok;
                         $$ = $2;
                     }
                 ;
@@ -151,32 +165,50 @@ varDeclList     : varDeclList ',' varDeclInit
                         }
                         else
                         { $$ = $3; }
+                        yyerrok;
                     }
                 | varDeclInit
                     { $$ = $1; }
+                | varDeclList ',' error
+                    { $$ = NULL; }
+                | error
+                    { $$ = NULL; }
                 ;
 varDeclInit     : varDeclId
                     {
-                        //printf("testvardeclinit: %s\n", $1->attr.name);
-                        //printf("testvardeclinit: %i\n", $1->lineno);
-                        $$ = $1;                //not sure if better to do this or $$ = t, not experienced enough with pointers
+                        $$ = $1;
                     }
                 | varDeclId ':' simpleExp
                     {
                         TreeNode* t = new TreeNode;
                         t->nodekind = DeclK;
                         t->subkind.decl = VarK;
-                        //printf("vDI: ",$1->attr.name);
-                        t->attr.name = $1->attr.name;
-                        t->lineno = $1->lineno;
-                        t->isArray = $1->isArray;
-                        t->child[0] = $3;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = NULL;
-                        t->child[2] = NULL;
-                        t->lineno = $2->linenum;    //get linenums from tokenData blocks 
+                        if($1 != NULL)
+                        {
+                            t->attr.name = $1->attr.name;
+                            t->lineno = $1->lineno;
+                            t->isArray = $1->isArray;
+                            t->size = $1->size;
+                        }
+                        t->lineno = $2->linenum;
+                        if($3 != NULL)
+                        {
+                            t->isInit = true;
+                            t->child[0] = $3;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
                         $$ = t;
                     }
+                | error ':' simpleExp
+                    { $$ = NULL; yyerrok;}
                 ;
 varDeclId       : ID
                     {
@@ -199,7 +231,9 @@ varDeclId       : ID
                         //t->subkind.decl = VarK;
                         t->isArray = true;
                         //printf("%s\n",$1->tokenstr);
-                        t->attr.size = $3->nvalue;
+                        if($1==NULL || $3 == NULL)
+                        {printf("ERROR HERE1\n"); fflush(stdout);}
+                        t->size = $3->nvalue + 1;
                         t->attr.name = $1->tokenstr;
                         t->lineno = $1->linenum;
                         t->child[0] = NULL;
@@ -207,6 +241,10 @@ varDeclId       : ID
                         t->child[2] = NULL;
                         $$ = t;
                     }
+                | ID '[' error
+                    { $$ = NULL; }
+                | error ']'
+                    { $$ = NULL; yyerrok;}
                 ;
 typeSpec        : INT
                     {
@@ -291,7 +329,7 @@ funDecl         : typeSpec ID '(' parms ')' stmt
                     {
                         TreeNode* t = new TreeNode;
                         t->nodekind = DeclK;
-                        t->subkind.decl = FuncK; 
+                        t->subkind.decl = FuncK;
                         //printf("fD2: ",$2->svalue);
                         t->attr.name = $1->tokenstr; 
                         t->lineno = $2->linenum;
@@ -342,6 +380,14 @@ funDecl         : typeSpec ID '(' parms ')' stmt
                         */
                         $$ = t;
                     }
+                | typeSpec error
+                    { $$ = NULL; }
+                | typeSpec ID '(' error
+                    { $$ = NULL; }
+                | ID '(' error
+                    { $$ = NULL; }
+                | ID '(' parms ')' error
+                    { $$ = NULL; }
                 ;
 parms           : parmList
                     { $$ = $1; }
@@ -364,6 +410,10 @@ parmList        : parmList ';' parmTypeList
                     }
                 | parmTypeList
                     { $$ = $1; }
+                | parmList ';' error
+                    { $$  = NULL; }
+                | error
+                    { $$ = NULL; }
                 ;
 parmTypeList    : typeSpec parmIdList
                     {
@@ -374,6 +424,7 @@ parmTypeList    : typeSpec parmIdList
                             t->declType = $1->declType;
                             t->nodeType = $1->nodeType;
                             t->subkind.decl = ParamK;
+                            t->isInit = true;
                             while(t->sibling != NULL)
                             {
                                 t = t->sibling;
@@ -381,12 +432,15 @@ parmTypeList    : typeSpec parmIdList
                                 t->declType = $1->declType;
                                 t->nodeType = $1->nodeType;
                                 t->subkind.decl = ParamK;
+                                t->isInit = true;
                             }
                             $$ = $2;
                         }
                         else
                         { $$ = $2; }
                     }
+                | typeSpec error
+                    { $$ = NULL; }
                 ;
 parmIdList      : parmIdList ',' parmId
                     {
@@ -402,9 +456,14 @@ parmIdList      : parmIdList ',' parmId
                         }
                         else
                         { $$ = $3; }
+                        yyerrok;
                     }
                 | parmId
                     { $$ = $1; }
+                | parmIdList ',' error 
+                    { $$ = NULL; }
+                | error
+                    { $$ = NULL; }
                 ;
 parmId          : ID
                     {
@@ -441,6 +500,7 @@ stmt            : matched
                 ;
 matched         : IF simpleExp THEN matched ELSE matched
                     {
+                        if ($2 == NULL){printf("ERROR0\n");fflush(stdout);}
                         TreeNode* t = new TreeNode;
                         t->nodekind = StmtK;            //nodekind
                         t->subkind.stmt = IfK;               //StmtKind
@@ -488,9 +548,16 @@ matched         : IF simpleExp THEN matched ELSE matched
                     { $$ = $1; }
                 | breakStmt
                     { $$ = $1; }
+                | IF error 
+                    { $$ = NULL; }
+                | IF error ELSE matched
+                    { $$ = NULL; yyerrok; }
+                | IF error THEN matched ELSE matched
+                    { $$ = NULL; yyerrok; }
                 ;
 unmatched       : IF simpleExp THEN matched
                     {
+                        if ($2 == NULL){printf("ERROR01\n");fflush(stdout);}
                         TreeNode* t = new TreeNode;
                         t->nodekind = StmtK;            //nodekind
                         t->subkind.stmt = IfK;               //StmtKind
@@ -512,6 +579,7 @@ unmatched       : IF simpleExp THEN matched
                     }
                 | IF simpleExp THEN unmatched
                     {
+                        if ($2 == NULL || $4 == NULL){printf("ERROR1\n");fflush(stdout);}
                         TreeNode* t = new TreeNode;
                         t->nodekind = StmtK;            //nodekind
                         t->subkind.stmt = IfK;               //StmtKind
@@ -525,6 +593,7 @@ unmatched       : IF simpleExp THEN matched
                     }
                 | IF simpleExp THEN matched ELSE unmatched
                     {
+                        if ($2 == NULL || $4 == NULL || $6 == NULL){printf("ERROR5\n");fflush(stdout);}
                         TreeNode* t = new TreeNode;
                         t->nodekind = StmtK;            //nodekind
                         t->subkind.stmt = IfK;               //StmtKind
@@ -539,11 +608,17 @@ unmatched       : IF simpleExp THEN matched
                     }
                 | unmatchediterStmt
                     { $$ = $1; }
+                | IF error THEN stmt
+                    { $$ = NULL; yyerrok; }
+                | IF error THEN matched ELSE unmatched
+                    { $$ = NULL; yyerrok; }
                 ;
 expStmt         : exp ';'
                     { $$ = $1; }
                 | ';'
                     { $$ = NULL; }
+                | error ';'
+                    { $$ = NULL; yyerrok; }
                 ;
 compoundStmt    : '{' localDecls stmtList '}'
                     {
@@ -578,6 +653,7 @@ compoundStmt    : '{' localDecls stmtList '}'
                             t->child[1]->isC1 = 1;
                             t->child[2] = NULL;
                         }
+                        //yyerrok;
                         $$ = t;
                     }
                 ;
@@ -617,20 +693,33 @@ matchediterStmt : WHILE simpleExp DO matched
                         t->nodekind = StmtK;            //nodekind
                         t->subkind.stmt = WhileK;         //StmtKind
                         t->lineno = $1->linenum;        //TokenData: linenum
-                        if($4 != NULL)
+                        if($2 == NULL && $4 == NULL)
                         {
-                            t->child[0] = $2;
-                            t->child[0]->isC0 = 1;
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;  
+                        }
+                        else if($2 == NULL && $4 != NULL)
+                        {
+                            t->child[0] = NULL;
                             t->child[1] = $4;
                             t->child[1]->isC1 = 1;
                             t->child[2] = NULL;
                         }
-                        else
+                        else if($2 != NULL && $4 == NULL)
                         {
                             t->child[0] = $2;
                             t->child[0]->isC0 = 1;
                             t->child[1] = NULL;
                             t->child[2] = NULL;   
+                        }
+                        else
+                        {
+                            t->child[0] = $2;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = $4;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;  
                         }
                         $$ = t;
 
@@ -646,6 +735,7 @@ matchediterStmt : WHILE simpleExp DO matched
                         TreeNode* t2 = new TreeNode;
                         t2->nodekind = DeclK;
                         t2->isInit = true;
+                        t2->mem = loca;
                         t2->subkind.decl = VarK;
                         t2->declType = DeclInteger;
                         t2->nodeType = nInt;
@@ -653,7 +743,7 @@ matchediterStmt : WHILE simpleExp DO matched
                         t2->attr.name = $2->tokenstr;
                         t2->isC0 = 1;
                         t->lineno = $1->linenum;
-                        if($6 != NULL)
+                        if($4 != NULL && $6 != NULL)
                         {
                             t->child[0] = t2;
                             t->child[0]->isC0 = 1;
@@ -662,7 +752,7 @@ matchediterStmt : WHILE simpleExp DO matched
                             t->child[2] = $6;
                             t->child[2]->isC2 = 1;
                         }
-                        else
+                        else if ($4 != NULL && $6 == NULL)
                         {
                             t->child[0] = t2;
                             t->child[0]->isC0 = 1;
@@ -670,12 +760,35 @@ matchediterStmt : WHILE simpleExp DO matched
                             t->child[1]->isC1 = 1;
                             t->child[2] = NULL;
                         }
-                        
+                        else if($4 == NULL && $6 != NULL)
+                        {
+                            t->child[0] = t2;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = $6;
+                            t->child[2]->isC2 = 1;
+                        }
+                        else
+                        {
+                            t->child[0] = t2;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
                         $$ = t;
                     }
+                | WHILE error DO matched
+                    { $$ = NULL; yyerrok; }
+                | WHILE error
+                    { $$ = NULL; }
+                | FOR ID '=' error DO matched
+                    { $$ = NULL; yyerrok; }
+                | FOR error
+                    { $$ = NULL; }
                 ;
 unmatchediterStmt : WHILE simpleExp DO unmatched
                     {
+                        if ($2 == NULL){printf("ERROR7\n");fflush(stdout);}
                         TreeNode* t = new TreeNode;
                         t->nodekind = StmtK;            //nodekind
                         t->subkind.stmt = WhileK;         //StmtKind
@@ -700,6 +813,7 @@ unmatchediterStmt : WHILE simpleExp DO unmatched
                     }
                 | FOR ID '=' iterRange DO unmatched
                     {
+                        if ($4 == NULL || $6 == NULL){printf("ERROR8\n");fflush(stdout);}
                         TreeNode* t = new TreeNode;
                         t->nodekind = StmtK;            //nodekind
                         t->subkind.stmt = ForK;              //StmtKind
@@ -727,6 +841,7 @@ unmatchediterStmt : WHILE simpleExp DO unmatched
                     ;
 iterRange       : simpleExp TO simpleExp
                     {
+                        if ($1 == NULL || $3 == NULL){printf("ERROR2\n");fflush(stdout);}
                         TreeNode* t = new TreeNode;
                         t->nodekind = StmtK;            //nodekind
                         t->subkind.stmt = RangeK;         //StmtKind
@@ -740,6 +855,7 @@ iterRange       : simpleExp TO simpleExp
                     }
                 | simpleExp TO simpleExp BY simpleExp
                     {
+                        if ($1 == NULL || $3 == NULL || $5 == NULL){printf("ERROR1\n");fflush(stdout);}
                         TreeNode* t = new TreeNode;
                         t->nodekind = StmtK;            //nodekind
                         t->subkind.stmt = RangeK;         //StmtKind
@@ -752,6 +868,12 @@ iterRange       : simpleExp TO simpleExp
                         t->child[2]->isC2 = 1;
                         $$ = t;
                     }
+                | simpleExp TO error
+                    { $$ = NULL; }
+                | error BY error
+                    { $$ = NULL; yyerrok; }
+                | simpleExp TO simpleExp BY error
+                    { $$ = NULL; }
                 ;
 returnStmt      : RETURN ';'
                     {
@@ -769,14 +891,27 @@ returnStmt      : RETURN ';'
                         TreeNode* t = new TreeNode;
                         t->nodekind = StmtK;            //nodekind
                         t->subkind.stmt = ReturnK;           //StmtKind
-                        t->attr.name = $2->attr.name;
-                        t->lineno = $1->linenum;        //TokenData: linenum
-                        t->child[0] = $2;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = NULL;
-                        t->child[2] = NULL;
+                        t->lineno = $1->linenum;
+                        if($2 != NULL)
+                        {
+                            t->attr.name = $2->attr.name;
+                            t->child[0] = $2;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            //t->attr.name = ;
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
+                        yyerrok;
                         $$ = t;
                     }
+                | RETURN error ';'
+                    { $$ = NULL; yyerrok; }
                 ;
 breakStmt       : BREAK ';'
                     {
@@ -790,89 +925,37 @@ breakStmt       : BREAK ';'
                         $$ = t;
                     }
                 ;
-exp             : mutable '=' exp
+exp             : mutable assignop exp
                     {
-                        TreeNode* t = new TreeNode;
-                        t->nodekind = ExpK;             //nodekind
-                        t->subkind.exp = AssignK;           //ExpKind   MAYBE SHOULD BE OpK??
-                        t->expType = Integer;
-                        t->nodeType = nInt;
-                        t->lineno = $2->linenum;        //TokenData: linenum
-                        t->attr.op = '=';
-                        t->attr.name = "=";                       
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
-                        $$ = t;
-                    }
-                | mutable ADDASS exp
-                    {
-                        TreeNode* t = new TreeNode;
-                        t->nodekind = ExpK;            //nodekind
-                        t->subkind.exp = AssignK;              //ExpKind
-                        t->lineno = $2->linenum;       //TokenData: linenum
-                        t->expType = Integer;
-                        t->nodeType = nInt;
-                        t->attr.op = ADDASS;           //t->attr.op = $2; ????     
-                        t->attr.name = "+=";            
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
-                        $$ = t;
-                    }
-                | mutable MINASS exp
-                    {
-                        TreeNode* t = new TreeNode;
-                        t->nodekind = ExpK;            //nodekind
-                        t->subkind.exp = AssignK;              //ExpKind
-                        t->lineno = $2->linenum;        //TokenData: linenum
-                        t->expType = Integer;
-                        t->nodeType = nInt;
-                        t->attr.op = MINASS;
-                        t->attr.name = "-=";                     
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
-                        $$ = t;
-                    }
-                | mutable MULASS exp
-                    {
-                        TreeNode* t = new TreeNode;
-                        t->nodekind = ExpK;            //nodekind
-                        t->subkind.exp = AssignK;         //ExpKind
-                        t->lineno = $2->linenum;        //TokenData: linenum
-                        t->expType = Integer;
-                        t->nodeType = nInt;
-                        t->attr.op = MULASS;
-                        t->attr.name = "*=";                       
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
-                        $$ = t;
-                    }
-                | mutable DIVASS exp
-                    {
-                        TreeNode* t = new TreeNode;
-                        t->nodekind = ExpK;            //nodekind
-                        t->subkind.exp = AssignK;              //ExpKind
-                        t->lineno = $2->linenum;       //TokenData: linenum
-                        t->expType = Integer;
-                        t->nodeType = nInt;
-                        t->attr.op = DIVASS;
-                        t->attr.name = "/=";                      
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
+                        TreeNode* t = $2;                    
+                        if($1 != NULL && $3 != NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else if ($1 != NULL && $3 == NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }   
+                        else if($1 == NULL && $3 != NULL)
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }  
                         $$ = t;
                     }
                 | mutable INC
@@ -885,10 +968,19 @@ exp             : mutable '=' exp
                         t->nodeType = nInt;
                         t->attr.op = INC;
                         t->attr.name = "++";                      
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = NULL;
-                        t->child[2] = NULL;
+                        if($1 != NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }    
                         $$ = t;
                     }
                 | mutable DEC
@@ -900,15 +992,109 @@ exp             : mutable '=' exp
                         t->expType = Integer;
                         t->nodeType = nInt;
                         t->attr.op = DEC;  
-                        t->attr.name = "--";                       
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = NULL;
-                        t->child[2] = NULL;
+                        t->attr.name = "--";
+                        if($1 != NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }                 
+                        
                         $$ = t;
                     }
                 | simpleExp
                     { $$ = $1; }
+                | error assignop exp
+                    { $$ = NULL; yyerrok; }
+                | mutable assignop error
+                    { $$ = NULL; }
+                | error INC
+                    { $$ = NULL; yyerrok; }
+                | error DEC
+                    { $$ = NULL; yyerrok; }
+                ;
+assignop        : '='
+                    {
+                        TreeNode* t = new TreeNode;
+                        t->nodekind = ExpK;             //nodekind
+                        t->subkind.exp = AssignK;           //ExpKind
+                        t->expType = Integer;
+                        t->nodeType = nInt;
+                        t->lineno = $1->linenum;        //TokenData: linenum
+                        t->attr.op = '=';
+                        t->attr.name = "=";                       
+                        t->child[0] = NULL;
+                        t->child[1] = NULL;
+                        t->child[2] = NULL;
+                        $$ = t;
+                    }
+                | ADDASS
+                    {
+                        TreeNode* t = new TreeNode;
+                        t->nodekind = ExpK;            //nodekind
+                        t->subkind.exp = AssignK;              //ExpKind
+                        t->lineno = $1->linenum;       //TokenData: linenum
+                        t->expType = Integer;
+                        t->nodeType = nInt;
+                        t->attr.op = ADDASS;           //t->attr.op = $2; ????     
+                        t->attr.name = "+=";            
+                        t->child[0] = NULL;
+                        t->child[1] = NULL;
+                        t->child[2] = NULL;
+                        $$ = t;
+                    }
+                | MINASS
+                    {
+                        TreeNode* t = new TreeNode;
+                        t->nodekind = ExpK;            //nodekind
+                        t->subkind.exp = AssignK;              //ExpKind
+                        t->lineno = $1->linenum;        //TokenData: linenum
+                        t->expType = Integer;
+                        t->nodeType = nInt;
+                        t->attr.op = MINASS;
+                        t->attr.name = "-=";                     
+                        t->child[0] = NULL;
+                        t->child[1] = NULL;
+                        t->child[2] = NULL;
+                        $$ = t;
+                    }
+                | MULASS
+                    {
+                        TreeNode* t = new TreeNode;
+                        t->nodekind = ExpK;            //nodekind
+                        t->subkind.exp = AssignK;         //ExpKind
+                        t->lineno = $1->linenum;        //TokenData: linenum
+                        t->expType = Integer;
+                        t->nodeType = nInt;
+                        t->attr.op = MULASS;
+                        t->attr.name = "*=";                       
+                        t->child[0] = NULL;
+                        t->child[1] = NULL;
+                        t->child[2] = NULL;
+                        $$ = t;
+                    }
+                | DIVASS
+                    {
+                        TreeNode* t = new TreeNode;
+                        t->nodekind = ExpK;            //nodekind
+                        t->subkind.exp = AssignK;              //ExpKind
+                        t->lineno = $1->linenum;       //TokenData: linenum
+                        t->expType = Integer;
+                        t->nodeType = nInt;
+                        t->attr.op = DIVASS;
+                        t->attr.name = "/=";                      
+                        t->child[0] = NULL;
+                        t->child[1] = NULL;
+                        t->child[2] = NULL;
+                        $$ = t;
+                    }
                 ;
 simpleExp       : simpleExp OR andExp
                     {
@@ -919,16 +1105,41 @@ simpleExp       : simpleExp OR andExp
                         t->expType =  Boolean;
                         t->nodeType = nBool;
                         t->attr.op = OR;
-                        t->attr.name = "OR";                  
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
+                        t->attr.name = "OR";
+                        if($1 != NULL && $3 != NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else if ($1 != NULL && $3 == NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }   
+                        else if($1 == NULL && $3 != NULL)
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }              
                         $$ = t;
                     }
                 | andExp
-                    { $$ = $1; }
+                    { $$ = $1;}
+                | simpleExp OR error
+                    { $$ = NULL; }
                 ;
 andExp          : andExp ANDD unaryRelExp
                     {
@@ -939,16 +1150,42 @@ andExp          : andExp ANDD unaryRelExp
                         t->expType =  Boolean;
                         t->nodeType = nBool;
                         t->attr.op = ANDD;
-                        t->attr.name = "AND";                     
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
+                        t->attr.name = "AND";
+                        if($1 != NULL && $3 != NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else if ($1 != NULL && $3 == NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }   
+                        else if($1 == NULL && $3 != NULL)
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }                        
+                        
                         $$ = t;
                     }
                 | unaryRelExp
                     { $$ = $1; }
+                | andExp ANDD error
+                    { $$ = NULL; }
                 ;
 unaryRelExp     : NOT unaryRelExp
                     {
@@ -959,28 +1196,65 @@ unaryRelExp     : NOT unaryRelExp
                         t->expType =  Boolean;
                         t->nodeType = nBool;
                         t->attr.op = NOT;
-                        t->attr.name = "NOT";                      
-                        t->child[0] = $2;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = NULL;
-                        t->child[2] = NULL;
+                        t->attr.name = "NOT"; 
+                        if($2 != NULL)
+                        {
+                            t->child[0] = $2;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL; 
+                        }                     
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL; 
+                        }
                         $$ = t;
                     }
                 | relExp
                     { $$ = $1; }
+                | NOT error
+                    { $$ = NULL; }
                 ;
 relExp          : minmaxExp relop minmaxExp
                     {
                         TreeNode* t = $2;    //make nodes in relop
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
+                        
+                        if($1 != NULL && $3 != NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else if ($1 != NULL && $3 == NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }   
+                        else if($1 == NULL && $3 != NULL)
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
                         $$ = t;
                     }
                 | minmaxExp
                     { $$ = $1; }
+                | minmaxExp relop error
+                    { $$ = NULL; }
                 ;
 relop           : LEQ
                     {
@@ -1076,11 +1350,34 @@ relop           : LEQ
 minmaxExp       : minmaxExp minmaxop sumExp
                     {
                         TreeNode* t = $2;
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
+                        if($1 != NULL && $3 != NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else if ($1 != NULL && $3 == NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }   
+                        else if($1 == NULL && $3 != NULL)
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
                         $$ = t;
                     }
                 | sumExp
@@ -1120,15 +1417,40 @@ minmaxop        : MAX
 sumExp          : sumExp sumop mulExp
                     {
                         TreeNode* t = $2;
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
+                        if($1 != NULL && $3 != NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else if ($1 != NULL && $3 == NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }   
+                        else if($1 == NULL && $3 != NULL)
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
                         $$ = t;
                     }
                 | mulExp
                     { $$ = $1; }
+                | sumExp sumop error
+                    { $$ = NULL; }
                 ;
 sumop           : '+'
                     {
@@ -1164,15 +1486,40 @@ sumop           : '+'
 mulExp          : mulExp mulop unaryExp
                     {
                         TreeNode* t = $2;
-                        t->child[0] = $1;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
-                        t->child[2] = NULL;
+                        if($1 != NULL && $3 != NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else if ($1 != NULL && $3 == NULL)
+                        {
+                            t->child[0] = $1;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }   
+                        else if($1 == NULL && $3 != NULL)
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
                         $$ = t;
                     }
                 | unaryExp
                     { $$ = $1; }
+                | mulExp mulop error
+                    { $$ = NULL; }
                 ;
 mulop           : '*'
                     {
@@ -1223,14 +1570,25 @@ mulop           : '*'
 unaryExp        : unaryop unaryExp
                     {
                         TreeNode* t = $1;
-                        t->child[0] = $2;
-                        t->child[0]->isC0 = 1;
-                        t->child[1] = NULL;
-                        t->child[2] = NULL;
+                        if($2 != NULL)
+                        {
+                            t->child[0] = $2;
+                            t->child[0]->isC0 = 1;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
+                        else
+                        {
+                            t->child[0] = NULL;
+                            t->child[1] = NULL;
+                            t->child[2] = NULL;
+                        }
                         $$ = t;
                     }
                 | factor
                     { $$ = $1; }
+                | unaryop error
+                    { $$ = NULL; } //HERE??
                 ;
 unaryop         : '-'
                     {
@@ -1316,20 +1674,30 @@ mutable         : ID
                         t2->attr.name = $1->tokenstr;
                         t2->isArray = true;
                         t2->isC0 = 1;
+
                         t->lineno = $1->linenum;
                         t->child[0] = t2;
-                        t->child[1] = $3;
-                        t->child[1]->isC1 = 1;
+                        if($3 == NULL)
+                        {
+                            t->child[1] = NULL;
+                        }
+                        else
+                        {
+                            t->child[1] = $3;
+                            t->child[1]->isC1 = 1;  
+                        }
                         t->child[2] = NULL;
                         $$ = t;
                     }
                 ;
 immutable       : '(' exp ')'
-                    { $$ = $2; }
+                    { $$ = $2; yyerrok; }
                 | call
                     { $$ = $1; }
                 | constant
                     { $$ = $1; }
+                | '(' error
+                    { $$ = NULL; }
                 ;
 call            : ID '(' args ')'
                     {
@@ -1352,6 +1720,8 @@ call            : ID '(' args ')'
                         }
                         $$ = t;
                     }
+                | error '('
+                    { $$ = NULL; yyerrok; }
                 ;
 args            : argList
                     { $$ = $1; }
@@ -1370,9 +1740,12 @@ argList         : argList ',' exp
                             $$ = $1;
                         }
                         else{ $$ = $3; }
+                        yyerrok;
                     }
                 | exp
                     { $$ = $1; }
+                | argList ',' error
+                    { $$ = NULL; }
                 ;
 constant        : NUMCONST
                     {
@@ -1416,7 +1789,8 @@ constant        : NUMCONST
                         t->nodeType = nChar;
                         t->nodekind = ExpK;              //nodekind
                         t->subkind.exp = ConstantK;               //ExpKind
-                        //printf("Sc: ",$1->svalue);
+                        t->size = strlen($1->tokenstr)-2+1;
+                        t->isStringConstant = true;
                         t->isArray = 1;
                         t->isConstant = true;
                         t->attr.name = $1->tokenstr;
@@ -1467,6 +1841,7 @@ constant        : NUMCONST
 %%
 int main(int argc, char** argv) 
 {
+    initErrorProcessing();
     numErrors = 0;
     numWarnings = 0;
     int numOption = 0;
@@ -1474,14 +1849,14 @@ int main(int argc, char** argv)
     int c;
     extern char* optarg;
     extern int optfind;
-    int printTreeFlag, printExtendedTreeFlag;
+    int printTreeFlag, printExtendedTreeFlag, printMemTreeFlag;
     int errflag;
     char* ofile;
     printTreeFlag =  printExtendedTreeFlag = 0;
     ofile = NULL;
     while(1)
     {
-        while((c = ourGetopt(argc, argv, (char*)"dDpPh")) != EOF)
+        while((c = ourGetopt(argc, argv, (char*)"dDpPhM")) != EOF)
         {
             switch(c)
             {
@@ -1506,6 +1881,10 @@ int main(int argc, char** argv)
                     printHelp();
                     numOption++;
                     break;
+                case 'M':
+                    printMemTreeFlag = 1;
+                    numOption++;
+                    break;
                 default:
                     break;
             }
@@ -1522,21 +1901,28 @@ int main(int argc, char** argv)
             printTree(savedTree); // set by -p 
         }
     }
-
-    IOtree = buildIOTree();                         //Build Tree Containing I/O Functions
-    semanticNoOut(IOtree, savedsymbolTable);        //Load them into our Symbol Table, Global Scope
-    semanticAnalysis(savedTree, savedsymbolTable);  //Proceed with Abstract Syntax Tree analysis
-    is_Used(savedsymbolTable);
-    if(!isMain)
+    if(numErrors == 0) // if no syntactical errors, semantic analysis
     {
+        IOtree = buildIOTree();                         //Build Tree Containing I/O Functions
+        semanticNoOut(IOtree, savedsymbolTable);        //Load them into our Symbol Table, Global Scope
+        semanticAnalysis(savedTree, savedsymbolTable);  //Proceed with Abstract Syntax Tree analysis
+        is_Used(savedsymbolTable);
+        if(!isMain)
+        {
         printf("ERROR(LINKER): A function named 'main' with no parameters must be defined.\n");
         numErrors++;
+        }
     }
     if(numErrors == 0){
         if(printExtendedTreeFlag){
             printExtendedTree(savedTree); // set by -P
         }
+        if(printMemTreeFlag){
+            printMemTree(savedTree); // set by -M
+            printf("Offset for end of global space: %d\n", goffset);
+        }
     }
+    
     printf("Number of warnings: %d\n", numWarnings);
     printf("Number of errors: %d\n", numErrors);
     return 0;

@@ -1,0 +1,9 @@
+// C-S21
+main()
+{
+    bool ba:true, bb: true  and  not  false, bc: 5>4;
+
+    outputb(ba);
+    outputb(bb);
+    outputb(bb);
+}
