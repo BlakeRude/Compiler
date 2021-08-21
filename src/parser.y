@@ -1,11 +1,10 @@
 %{
 /*
  * Blake Rude
- * CS445 Compiler Design
- * This comment is in parser.y, Bison File
- * Spring 2021
+ * C- Compiler
  */
 #include <stdio.h>
+#include <ctime>
 #include <ctype.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -17,9 +16,15 @@
 #include "symbolTable.h"
 #include "semantic.h"
 #include "yyerror.h"
+#include "emitcode.h"
+#include "codegen.h"
+#include <iostream>
 
 extern int yylex();
 extern FILE *yyin;
+FILE *code;
+int mainLocation;
+time_t now = time(0);
 extern int yydebug;
 static TreeNode* savedTree;
 static TreeNode* IOtree;
@@ -28,6 +33,7 @@ int numErrors=0;
 int numWarnings=0;
 int foffset=0;
 int goffset=0;
+int toffset=0;
 #define YYERROR_VERBOSE
 /*
 void yyerror(const char *msg)
@@ -1789,7 +1795,20 @@ constant        : NUMCONST
                         t->nodeType = nChar;
                         t->nodekind = ExpK;              //nodekind
                         t->subkind.exp = ConstantK;               //ExpKind
-                        t->size = strlen($1->tokenstr)-2+1;
+                        char* test = $1->tokenstr;
+                        for(int i = 0; i< strlen(test); i++)
+                        {
+                            if(test[i] == '\\' && test[i+1] == '0')
+                            {
+                                t->size = strlen($1->tokenstr)-2;
+                                break;
+                            }
+                            else
+                            {
+                                t->size = strlen($1->tokenstr)-2+1;
+                            }
+                        }
+                        
                         t->isStringConstant = true;
                         t->isArray = 1;
                         t->isConstant = true;
@@ -1845,6 +1864,7 @@ int main(int argc, char** argv)
     numErrors = 0;
     numWarnings = 0;
     int numOption = 0;
+    char* filename;
     /* ourgetopt things */
     int c;
     extern char* optarg;
@@ -1852,7 +1872,7 @@ int main(int argc, char** argv)
     int printTreeFlag, printExtendedTreeFlag, printMemTreeFlag;
     int errflag;
     char* ofile;
-    printTreeFlag =  printExtendedTreeFlag = 0;
+    printTreeFlag =  printExtendedTreeFlag = printMemTreeFlag = 0;
     ofile = NULL;
     while(1)
     {
@@ -1892,9 +1912,13 @@ int main(int argc, char** argv)
         break;
     }
     if (argc == numOption+2)
+    {
         yyin = fopen(argv[argc-1], "r");
+    }
     else
+    {
         yyin = stdin;
+    }
     yyparse();
     if(numErrors == 0 ){
         if(printTreeFlag){
@@ -1925,5 +1949,155 @@ int main(int argc, char** argv)
     
     printf("Number of warnings: %d\n", numWarnings);
     printf("Number of errors: %d\n", numErrors);
+
+    //CODE GENERATION PHASE, building my .tm to look like Dr. Heckendorns
+    if(numErrors == 0)
+    {
+        int saveGoffset = goffset;
+        goffset = -1;
+        if (argc == numOption+2)
+        {
+            int loc = emitSkip(1);
+            char* filename = argv[argc-1];
+            int i = strlen(filename);
+            if(filename[i-3] == '.' && filename[i-2] == 'c' && filename[i-1] == '-')
+            {
+                filename[i-2] = 't';
+                filename[i-1] = 'm';
+            }
+            code = fopen(filename, "w+");
+
+            //unnecessary but added exact .tm build time
+            char* time = ctime(&now);
+            int j = strlen(time);
+            if(time[j-1] == '\n')
+            {
+                time[j-1] = '\0';
+            }
+            
+            //Beginning of .tm
+            emitComment((char*)"C- compiler version", (char*)"1");
+            emitComment((char*)"Built:",time);
+            emitComment((char*)"Author: Blake Rude");
+            emitComment((char*)"File compiled:", argv[argc-1]);
+            emitComment((char*)"");
+            emitComment((char*)"** ** ** ** ** ** ** ** ** ** ** **");
+            emitComment((char*)"FUNCTION input");
+            emitRM((char*)"ST", 3, -1, 1, (char*)"Store return address");
+            emitRO((char*)"IN", 2, 2, 2, (char*)"Grab int input");
+            emitRM((char*)"LD", 3, -1, 1, (char*)"Load return address");
+            emitRM((char*)"LD", 1, 0, 1, (char*)"Adjust fp");
+            emitRM((char*)"JMP", 7, 0, 3, (char*)"Return");
+            emitComment((char*)"END FUNCTION input");
+            emitComment((char*)"");
+            emitComment((char*)"** ** ** ** ** ** ** ** ** ** ** **");
+            emitComment((char*)"FUNCTION output");
+            emitRM((char*)"ST", 3, -1, 1, (char*)"Store return address");
+            emitRM((char*)"LD", 3, -2, 1, (char*)"Load parameter");
+            emitRO((char*)"OUT", 3, 3, 3, (char*)"Output integer");
+            emitRM((char*)"LD", 3, -1, 1, (char*)"Load return address");
+            emitRM((char*)"LD", 1, 0, 1, (char*)"Adjust fp");
+            emitRM((char*)"JMP", 7, 0, 3, (char*)"Return");
+            emitComment((char*)"END FUNCTION output");
+            emitComment((char*)"");
+            emitComment((char*)"** ** ** ** ** ** ** ** ** ** ** **");
+            emitComment((char*)"FUNCTION inputb");
+            emitRM((char*)"ST", 3, -1, 1, (char*)"Store return address");
+            emitRO((char*)"INB", 2, 2, 2, (char*)"Grab bool input");
+            emitRM((char*)"LD", 3, -1, 1, (char*)"Load return address");
+            emitRM((char*)"LD", 1, 0, 1, (char*)"Adjust fp");
+            emitRM((char*)"JMP", 7, 0, 3, (char*)"Return");
+            emitComment((char*)"END FUNCTION inputb");
+            emitComment((char*)"");
+            emitComment((char*)"** ** ** ** ** ** ** ** ** ** ** **");
+            emitComment((char*)"FUNCTION outputb");
+            emitRM((char*)"ST", 3, -1, 1, (char*)"Store return address");
+            emitRM((char*)"LD", 3, -2, 1, (char*)"Load parameter");
+            emitRO((char*)"OUTB", 3, 3, 3, (char*)"Output bool");
+            emitRM((char*)"LD", 3, -1, 1, (char*)"Load return address");
+            emitRM((char*)"LD", 1, 0, 1, (char*)"Adjust fp");
+            emitRM((char*)"JMP", 7, 0, 3, (char*)"Return");
+            emitComment((char*)"END FUNCTION outputb");
+            emitComment((char*)"");
+            emitComment((char*)"** ** ** ** ** ** ** ** ** ** ** **");
+            emitComment((char*)"FUNCTION inputc");
+            emitRM((char*)"ST", 3, -1, 1, (char*)"Store return address");
+            emitRO((char*)"INC", 2, 2, 2, (char*)"Grab char input");
+            emitRM((char*)"LD", 3, -1, 1, (char*)"Load return address");
+            emitRM((char*)"LD", 1, 0, 1, (char*)"Adjust fp");
+            emitRM((char*)"JMP", 7, 0, 3, (char*)"Return");
+            emitComment((char*)"END FUNCTION inputc");
+            emitComment((char*)"");
+            emitComment((char*)"** ** ** ** ** ** ** ** ** ** ** **");
+            emitComment((char*)"FUNCTION outputc");
+            emitRM((char*)"ST", 3, -1, 1, (char*)"Store return address");
+            emitRM((char*)"LD", 3, -2, 1, (char*)"Load parameter");
+            emitRO((char*)"OUTC", 3, 3, 3, (char*)"Output char");
+            emitRM((char*)"LD", 3, -1, 1, (char*)"Load return address");
+            emitRM((char*)"LD", 1, 0, 1, (char*)"Adjust fp");
+            emitRM((char*)"JMP", 7, 0, 3, (char*)"Return");
+            emitComment((char*)"END FUNCTION outputc");
+            emitComment((char*)"");
+            emitComment((char*)"** ** ** ** ** ** ** ** ** ** ** **");
+            emitComment((char*)"FUNCTION outnl");
+            emitRM((char*)"ST", 3, -1, 1, (char*)"Store return address");
+            emitRO((char*)"OUTNL", 3, 3, 3, (char*)"Output a newline");
+            emitRM((char*)"LD", 3, -1, 1, (char*)"Load return address");
+            emitRM((char*)"LD", 1, 0, 1, (char*)"Adjust fp");
+            emitRM((char*)"JMP", 7, 0, 3, (char*)"Return");
+            emitComment((char*)"END FUNCTION outnl");
+
+            //Traverse Functions Only, globals and statics later
+            TreeNode * temp = new TreeNode;
+            temp = savedTree;
+            while(temp->sibling != NULL)
+            {
+                if(temp->subkind.decl == FuncK)
+                {
+                    codeGeneration(temp, savedsymbolTable);
+                }
+                temp = temp->sibling;
+            }
+            if(temp->subkind.decl == FuncK)
+            {
+                codeGeneration(temp, savedsymbolTable);
+            }
+            //END of Function Traversal
+
+            backPatchAJumpToHere(loc, (char*)"Jump to init [backpatch]");
+            //init
+            emitComment((char*)"INIT");
+            emitRM((char*)"LDA", 1, saveGoffset, 0, (char*)"set first frame at end of globals");
+            emitRM((char*)"ST", 1, 0, 1, (char*)"store old fp (point to self)");
+
+            //Globals and Statics 
+            emitComment((char*)"INIT GLOBALS AND STATICS");
+            temp = savedTree;
+            while(temp->sibling != NULL)
+            {
+                if(temp->subkind.decl == VarK)
+                {
+                    codeGeneration(temp, savedsymbolTable);
+                }
+                temp = temp->sibling;
+            }
+            if(temp->subkind.decl == VarK)
+            {
+                codeGeneration(temp, savedsymbolTable);
+            }
+            GenerateStatics(savedTree, savedsymbolTable);
+            //end of globals and statics
+            emitComment((char*)"END INIT GLOBALS AND STATICS");
+
+            emitRM((char*)"LDA", 3, 1, 7, (char*)"Return address in ac");
+            emitRM((char*)"JMP", 7,mainLocation-emitSkip(0)-1, 7, (char*)"Jump to main");
+            emitRO((char*)"HALT", 0, 0, 0, (char*)"DONE!");
+            //end of init
+            emitComment((char*)"END INIT");
+            
+        }
+        else{ printf("ERROR: Please use Command Line input instead of STDIN.\n"); }
+    }
+
     return 0;
 }

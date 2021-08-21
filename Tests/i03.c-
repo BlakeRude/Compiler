@@ -1,7 +1,0 @@
-// C-S21
-char gc[13];
-main(){
-    output(*gc);
-    {
-    }
-}

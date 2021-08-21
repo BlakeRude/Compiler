@@ -1,7 +1,0 @@
-main()
-{
-     for i = 300 to 313 by 2 do {
-         output(i);
-         outnl();
-     }
-}

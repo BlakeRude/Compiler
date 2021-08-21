@@ -1,11 +1,13 @@
-#make for CS445 Compiler
+# Author: Blake Rude
+#
+#
 BIN  = parser
 CC   = g++
-CFLAGS = -g -w # for use with C++ if file ext is .c -DCPLUSPLUS
+CFLAGS = -g -w -O3 -Wno-write-strings # for use with C++ if file ext is .c -DCPLUSPLUS
 
 SRCS = $(BIN).y $(BIN).l
 HDRS = scanType.h
-OBJS = lex.yy.o symbolTable.o util.o ourgetopt.o semanticRefactor.o yyerror.o
+OBJS = lex.yy.o symbolTable.o util.o ourgetopt.o semanticRefactor.o yyerror.o emitcode.o codegen.o
 
 $(BIN): $(OBJS)
 	$(CC) $(CFLAGS) $(OBJS) -o c-

@@ -1,3 +1,6 @@
+// Author: Blake Rude
+//
+//
 #ifndef _GLOBALS_H_
 #define _GLOBALS_H_
 
@@ -12,6 +15,8 @@ extern int numErrors;
 extern int numWarnings;
 extern int foffset;
 extern int goffset;
+extern int toffset;
+extern int mainLocation;
 const int MAXCHILDREN = 3;
 // the exact type of the token or node involved.  These are divided into
 // various "kinds" in the enums that follow
@@ -87,7 +92,8 @@ typedef struct treeNode
     bool isStringConstant = false;
     MemoryKind mem = non;
     int size = 1;
-    int location = 0; //is 0 right? n>=0
+    int location = 0;
+    int emitLoc = 0; // = emitLoc in emitcode.cpp, use emitSkip(0) to get this location
 
     // even more semantic stuff will go here in later assignments.
 } TreeNode;

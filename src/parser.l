@@ -3,9 +3,7 @@
 
 /*
  * Blake Rude
- * CS445 Compiler Design
- * This comment is in parser.l, Flex file
- * Spring 2021
+ * C- Compiler
  */
  #include <stdlib.h>
  #include "scanType.h"

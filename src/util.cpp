@@ -1,3 +1,6 @@
+// Author: Blake Rude
+//
+//
 #include "globals.h"
 #include "util.h"
 #include <string>
@@ -20,7 +23,6 @@ static void printSpaces(void)
 
 void printTree(TreeNode *syntaxTree)
 {
-    //Taken and modified from Textbook p.510
     int siblingCount = 0;
     INDENT;
     while (syntaxTree != NULL)
@@ -1818,6 +1820,7 @@ TreeNode *buildIOTree()
     in->nodekind = DeclK;
     in->declType = DeclInteger;
     in->subkind.decl = FuncK;
+    in->emitLoc = 1;
     in->child[0] = NULL;
     in->child[1] = NULL;
     in->child[2] = NULL;
@@ -1829,6 +1832,7 @@ TreeNode *buildIOTree()
     inb->nodekind = DeclK;
     inb->declType = DeclBoolean;
     inb->subkind.decl = FuncK;
+    inb->emitLoc = 12;
     inb->child[0] = NULL;
     inb->child[1] = NULL;
     inb->child[2] = NULL;
@@ -1840,6 +1844,7 @@ TreeNode *buildIOTree()
     inc->nodekind = DeclK;
     inc->declType = DeclChar;
     inc->subkind.decl = FuncK;
+    inc->emitLoc = 23;
     inc->child[0] = NULL;
     inc->child[1] = NULL;
     inc->child[2] = NULL;
@@ -1851,6 +1856,7 @@ TreeNode *buildIOTree()
     out->nodekind = DeclK;
     out->declType = DeclVoid;
     out->subkind.decl = FuncK;
+    out->emitLoc = 6;
     out->child[0] = d1;
     out->child[0]->isC0 = true;
     out->child[1] = NULL;
@@ -1863,6 +1869,7 @@ TreeNode *buildIOTree()
     outb->nodekind = DeclK;
     outb->declType = DeclVoid;
     outb->subkind.decl = FuncK;
+    outb->emitLoc = 17;
     outb->child[0] = d2;
     outb->child[0]->isC0 = true;
     outb->child[1] = NULL;
@@ -1875,6 +1882,7 @@ TreeNode *buildIOTree()
     outc->nodekind = DeclK;
     outc->declType = DeclVoid;
     outc->subkind.decl = FuncK;
+    outc->emitLoc = 28;
     outc->child[0] = d3;
     outc->child[0]->isC0 = true;
     outc->child[1] = NULL;
@@ -1887,6 +1895,7 @@ TreeNode *buildIOTree()
     outnl->nodekind = DeclK;
     outnl->declType = DeclVoid;
     outnl->subkind.decl = FuncK;
+    outnl->emitLoc = 34;
     outnl->child[0] = NULL;
     outnl->child[1] = NULL;
     outnl->child[2] = NULL;

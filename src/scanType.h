@@ -1,10 +1,7 @@
 /*
  * Blake Rude
- * CS445 Compiler Design
- * This comment is in scanType.h, Header File
- * Spring 2021
+ * C- Compiler
  */
-//taken from CS445 Class webpage, currently unchanged from the original
 #ifndef _SCANTYPE_H_
 #define _SCANTYPE_H_
 /* 

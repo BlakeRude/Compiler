@@ -1,7 +1,0 @@
-// C-S21
-main()
-{
-   int a;
-   bool b;
-   char c;
-}

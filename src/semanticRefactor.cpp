@@ -1,3 +1,6 @@
+// Author: Blake Rude
+//
+//
 #include "globals.h"
 #include "semantic.h"
 #include "symbolTable.h"
@@ -18,6 +21,7 @@ bool disableW = false;
 int isMain = 0;
 bool inCompound = false;
 bool forflag = false;
+bool inAssign = false;
 TreeNode *mostRecentFunc = new treeNode;
 void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
 {
@@ -369,7 +373,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
             {
             }
-            else if (!(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "!=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "++") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "!=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0))
+            else if (!(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "!=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "++") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "!=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0))
             {
                 void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                 if (data == NULL)
@@ -530,6 +534,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 printf("ERROR(YOU SHOULD NOT SEE THIS) ForKc0.\n");
             }
+            foffset += -2; //NEWWWWWWWWWWWWWWWWW
             syntaxTree->size = foffset;
             forflag = false;
 
@@ -610,7 +615,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (!(strcmp(syntaxTree->child[0]->attr.name, "SIZEOF") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "--") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "++") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+") == 0))
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "!=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "/") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "SIZEOF") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "--") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "++") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+") == 0))
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -1013,7 +1018,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (!(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0))
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0))
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -1276,7 +1281,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (!(strcmp(syntaxTree->child[0]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "SIZEOF") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0)) //(syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "!=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "SIZEOF") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0)) //(syntaxTree->child[0]->nodeType == uninit || syntaxTree->child[0]->nodeType == nVoid) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -1310,7 +1315,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
                 }
-                else if (!(strcmp(syntaxTree->child[1]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*") == 0)) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[1]->attr.name, "!=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, ">=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*") == 0)) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                     if (data == NULL)
@@ -1413,7 +1418,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (!(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "?") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "AND") == 0))
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "<") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "?") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "AND") == 0))
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -1440,7 +1445,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
                 }
-                else if (!(strcmp(syntaxTree->child[1]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "-") == 0)) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[1]->attr.name, "==") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "<") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, ">=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, ">") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "AND") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "OR") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "NOT") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "-") == 0)) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                     if (data == NULL)
@@ -1863,10 +1868,10 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 }
                 else if ((data != NULL) && !disableW && !temp && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0)) // if c1 isnt inited, and isnt '['
                 {
-                    printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                    numWarnings++;
-                    static_cast<TreeNode *>(data)->isInit = true;
-                    syntaxTree->child[0]->isInit = true;
+                    //printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                    //numWarnings++;
+                    //static_cast<TreeNode *>(data)->isInit = true;
+                    //syntaxTree->child[0]->isInit = true;
                 }
 
                 // Mess with c0
@@ -1892,9 +1897,12 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                         syntaxTree->child[0]->isArray = static_cast<TreeNode *>(data)->isArray;
                         if (!syntaxTree->child[0]->isInit)
                         {
-                            printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
-                            numWarnings++;
-                            static_cast<TreeNode *>(data)->isInit = true;
+                            if (!inAssign)
+                            {
+                                printf("WARNING(%d): Variable '%s' may be uninitialized when used here.\n", syntaxTree->lineno, syntaxTree->child[0]->attr.name);
+                                numWarnings++;
+                                static_cast<TreeNode *>(data)->isInit = true;
+                            }
                         }
                     }
                 }
@@ -2051,6 +2059,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
             {
                 //syntaxTree->nodeType = nBool;
                 //traverse C0 to get its type
+                inAssign = true;
                 bool c0Decl, c1Decl;
                 c0Decl = c1Decl = true;
                 if (strcmp(syntaxTree->child[0]->attr.name, "[") == 0)
@@ -2065,6 +2074,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 {
                     printf("ERROR(YOU SHOULD NOT SEE THIS) AssignKc0.\n");
                 }
+                inAssign = false;
                 //traverse c1 to get its type
                 if (syntaxTree->child[1] != NULL)
                 {
@@ -2103,6 +2113,12 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                     }
                     else
                     {
+                        void *data = symbolTable.lookup(syntaxTree->child[0]->child[0]->attr.name);
+                        if (data != NULL)
+                        {
+                            static_cast<TreeNode *>(data)->isUsed = true;
+                            static_cast<TreeNode *>(data)->isInit = true;
+                        }
                         c0Decl = false;
                     }
                 }
@@ -2349,7 +2365,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[0]->isNC || syntaxTree->child[0]->isConstant)
                 {
                 }
-                else if (!(strcmp(syntaxTree->child[0]->attr.name, "?") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "/") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "/=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0))
+                else if (!(strcmp(syntaxTree->child[0]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "?") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "+=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "/") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "-=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "/=") == 0) && !(strcmp(syntaxTree->child[0]->attr.name, "[") == 0))
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[0]->attr.name);
                     if (data == NULL)
@@ -2406,7 +2422,7 @@ void semanticAnalysis(TreeNode *syntaxTree, SymbolTable symbolTable)
                 if (syntaxTree->child[1]->isNC || syntaxTree->child[1]->isConstant)
                 {
                 }
-                else if (!(strcmp(syntaxTree->child[1]->attr.name, "?") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "/=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "/") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "-=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "++") == 0)) //(syntaxTree->child[1]->nodeType == uninit) //if its gonna be in symbol table
+                else if (!(strcmp(syntaxTree->child[1]->attr.name, "=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "[") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "?") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "+") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "/=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "/") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "%") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "*=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "-=") == 0) && !(strcmp(syntaxTree->child[1]->attr.name, "++") == 0)) //(syntaxTree->child[1]->nodeType == uninit) //if its gonna be in symbol table
                 {
                     void *data = symbolTable.lookup(syntaxTree->child[1]->attr.name);
                     if (data == NULL)
@@ -2949,7 +2965,7 @@ void is_Used(SymbolTable sym)
     sym.applyToAll(actionUsed);
 }
 
-//I Really Really, ... , Really dont like this, will fix in the near future
+//I dont like this, will fix in the near future
 //
 //
 //
@@ -2961,41 +2977,6 @@ void is_Used(SymbolTable sym)
 //
 void semanticNoOut(TreeNode *syntaxTree, SymbolTable symbolTable)
 {
-    //fflush(stdout);
-    /*
-    if(syntaxTree->isNC)
-    {
-        printf("%d\n",syntaxTree->attr.value);fflush(stdout);
-    }
-    else if(syntaxTree->attr.name)
-    {
-        printf("%s\n",syntaxTree->attr.name);fflush(stdout);
-    }
-    */
-    //symbolTable.print(pointerPrintAddr);
-    /////////////////////////////////////////////////
-    //I wrote about 3k lines previously, refactoring
-    //to use what you showed in the other dayclass instead of book
-    //it increases my work greatly to change it last minute
-    //but i was having too many scoping difficulties with
-    //previous implementation
-    //
-    //refactoring to do:
-    //HECKENDORN IN CLASS:
-    //....
-    //case for:                 (same idea for everything else as well)
-    //      symtab->enter();
-    //      process stuff...
-    //      traverse(current->child[0]);
-    //      process stuff...
-    //      traverse(current->child[1]);
-    //      process stuff...
-    //      traverse(current->child[2]);
-    //      process stuff...
-    //      symtam->apply...(checkused)
-    //      symtab->leave()
-    //      break;
-
     //DECLARATIONS
 
     if (syntaxTree->nodekind == DeclK)
