@@ -1,5 +1,5 @@
 # Compiler
-This is my compiler I built in C++, Yacc, and Bison, used to compile C-.
+This is my compiler I built in C++, Flex, and Bison, used to compile C-.
 
 C- is a custom language and is a subset of C with some modifications.
 The compiler targets Tiny Machine which emulates running on an actual processor.
